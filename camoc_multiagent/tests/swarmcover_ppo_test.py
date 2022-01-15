@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3 import PPO
 from envs.swarmcover import swarm_cover_v1
@@ -17,12 +15,12 @@ model = PPO(MlpPolicy, env, verbose=3, gamma=0.95, n_steps=256,
 
 model.learn(total_timesteps=20000)
 
-model.save("swarmcover_ppo_policy")
+model.save("./policies/swarmcover_ppo_policy")
 
 # Rendering
 env = swarm_cover_v1.env()
 env = ss.frame_stack_v1(env, 3)
-model = PPO.load("swarmcover_ppo_policy")
+model = PPO.load("./policies/swarmcover_ppo_policy")
 
 env.reset()
 for agent in env.agent_iter():
