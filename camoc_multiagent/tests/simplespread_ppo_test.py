@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3 import PPO
 from pettingzoo.mpe import simple_spread_v2
@@ -14,6 +16,7 @@ model = PPO(MlpPolicy, env, verbose=3, gamma=0.95, n_steps=256,
             batch_size=256)
 
 model.learn(total_timesteps=20000)
+
 model.save("simple_spread_v2_ppo_policy")
 
 # Rendering

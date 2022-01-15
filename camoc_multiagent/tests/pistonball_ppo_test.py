@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from stable_baselines3.ppo import CnnPolicy
 from stable_baselines3 import PPO
 from pettingzoo.butterfly import pistonball_v5
