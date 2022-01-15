@@ -1,6 +1,6 @@
 import numpy as np
 
-from pettingzoo.mpe._mpe_utils.core import Agent, World
+from pettingzoo.mpe._mpe_utils.core import Agent, World, Landmark
 #from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe.scenarios.simple_spread import Scenario as SimpleSpreadScenario
 #from core import Target
@@ -42,6 +42,6 @@ class Scenario(SimpleSpreadScenario):
         in_place_mesh = self.target_mesh - world.landmarks[0].state.p_pos 
 
         for a in world.agents:
-            rew -= np.min(np.norm(in_place_mesh - a.state.p_pos))
+            rew -= np.min(np.linalg.norm(in_place_mesh - a.state.p_pos))
 
         return rew
