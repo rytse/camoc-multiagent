@@ -39,10 +39,12 @@ from stable_baselines3.common.vec_env import (
 from torch import nn as nn  # noqa: F401
 
 # Register custom envs
-import utils.import_envs  # noqa: F401 pytype: disable=import-error
-from utils.callbacks import SaveVecNormalizeCallback, TrialEvalCallback
-from utils.hyperparams_opt import HYPERPARAMS_SAMPLER
-from utils.utils import ALGOS, get_callback_list, get_latest_run_id, get_wrapper_class, linear_schedule
+import rl_agent.trainutils.import_envs  # noqa: F401 pytype: disable=import-error
+from rl_agent.trainutils.callbacks import SaveVecNormalizeCallback, TrialEvalCallback
+from rl_agent.trainutils.hyperparams_opt import HYPERPARAMS_SAMPLER
+from rl_agent.trainutils.utils import ALGOS, get_callback_list, get_latest_run_id, get_wrapper_class, linear_schedule
+
+from stable_baselines3.common.type_aliases import GymEnv
 
 
 class ExperimentManager(object):
@@ -56,8 +58,13 @@ class ExperimentManager(object):
     def __init__(
         self,
         args: argparse.Namespace,
-        algo: str,
-        env_id: str,
+        #algo: str,
+        #env_name: str,
+        algo,  # factory func, not env obj
+        algo_name: str,
+        env_train,  # factory func, not env obj
+        env_eval,  # factory func, not env obj
+        env_name: str,
         log_folder: str,
         tensorboard_log: str = "",
         n_timesteps: int = 0,
@@ -89,7 +96,10 @@ class ExperimentManager(object):
     ):
         super(ExperimentManager, self).__init__()
         self.algo = algo
-        self.env_id = env_id
+        self.algo_name = algo_name
+        self.env_train = env_train
+        self.env_eval = env_eval
+        self.env_name = env_name
         # Custom params
         self.custom_hyperparams = hyperparams
         self.env_kwargs = {} if env_kwargs is None else env_kwargs
@@ -119,10 +129,11 @@ class ExperimentManager(object):
         self._hyperparams = {}
 
         self.trained_agent = trained_agent
-        self.continue_training = trained_agent.endswith(".zip") and os.path.isfile(trained_agent)
+        #self.continue_training = trained_agent.endswith(".zip") and os.path.isfile(trained_agent)
+        self.continue_training = False
         self.truncate_last_trajectory = truncate_last_trajectory
 
-        self._is_atari = self.is_atari(env_id)
+        self._is_atari = self.is_atari(env_name)
         # Hyperparameter optimization config
         self.optimize_hyperparameters = optimize_hyperparameters
         self.storage = storage
@@ -136,21 +147,21 @@ class ExperimentManager(object):
         self.pruner = pruner
         self.n_startup_trials = n_startup_trials
         self.n_evaluations = n_evaluations
-        self.deterministic_eval = not self.is_atari(self.env_id)
+        self.deterministic_eval = not self.is_atari(self.env_name)
 
         # Logging
         self.log_folder = log_folder
-        self.tensorboard_log = None if tensorboard_log == "" else os.path.join(tensorboard_log, env_id)
+        self.tensorboard_log = None if tensorboard_log == "" else os.path.join(tensorboard_log, env_name)
         self.verbose = verbose
         self.args = args
         self.log_interval = log_interval
         self.save_replay_buffer = save_replay_buffer
 
-        self.log_path = f"{log_folder}/{self.algo}/"
+        self.log_path = f"{log_folder}/{self.algo_name}/"
         self.save_path = os.path.join(
-            self.log_path, f"{self.env_id}_{get_latest_run_id(self.log_path, self.env_id) + 1}{uuid_str}"
+            self.log_path, f"{self.env_name}_{get_latest_run_id(self.log_path, self.env_name) + 1}{uuid_str}"
         )
-        self.params_path = f"{self.save_path}/{self.env_id}"
+        self.params_path = f"{self.save_path}/{self.env_name}"
 
     def setup_experiment(self) -> Optional[BaseAlgorithm]:
         """
@@ -166,7 +177,8 @@ class ExperimentManager(object):
         self.create_callbacks()
 
         # Create env to have access to action space for action noise
-        env = self.create_envs(self.n_envs, no_log=False)
+        env = self.env_train()  # create the environment that the func builds
+        # = self.create_envs(self.n_envs, no_log=False)
 
         self._hyperparams = self._preprocess_action_noise(hyperparams, saved_hyperparams, env)
 
@@ -176,8 +188,8 @@ class ExperimentManager(object):
             return None
         else:
             # Train an agent from scratch
-            model = ALGOS[self.algo](
-                env=env,
+            model = self.algo(  # factory func, not env obj
+                env=env,  # factory func, not env obj
                 tensorboard_log=self.tensorboard_log,
                 seed=self.seed,
                 verbose=self.verbose,
@@ -218,7 +230,7 @@ class ExperimentManager(object):
         :param model:
         """
         print(f"Saving to {self.save_path}")
-        model.save(f"{self.save_path}/{self.env_id}")
+        model.save(f"{self.save_path}/{self.env_name}")
 
         if hasattr(model, "save_replay_buffer") and self.save_replay_buffer:
             print("Saving replay buffer")
@@ -248,14 +260,15 @@ class ExperimentManager(object):
 
     def read_hyperparameters(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         # Load hyperparameters from yaml file
-        with open(f"hyperparams/{self.algo}.yml", "r") as f:
+        print(os.getcwd())
+        with open(f"./rl_agent/hyperparams/{self.algo_name}.yml", "r") as f:
             hyperparams_dict = yaml.safe_load(f)
-            if self.env_id in list(hyperparams_dict.keys()):
-                hyperparams = hyperparams_dict[self.env_id]
+            if self.env_name in list(hyperparams_dict.keys()):
+                hyperparams = hyperparams_dict[self.env_name]
             elif self._is_atari:
                 hyperparams = hyperparams_dict["atari"]
             else:
-                raise ValueError(f"Hyperparameters not found for {self.algo}-{self.env_id}")
+                raise ValueError(f"Hyperparameters not found for {self.algo_name}-{self.env_name}")
 
         if self.custom_hyperparams is not None:
             # Overwrite hyperparams if needed
@@ -420,7 +433,8 @@ class ExperimentManager(object):
 
             save_vec_normalize = SaveVecNormalizeCallback(save_freq=1, save_path=self.params_path)
             eval_callback = EvalCallback(
-                self.create_envs(self.n_eval_envs, eval_env=True),
+                #self.env_eval(), # self.create_envs(self.n_eval_envs, eval_env=True),
+                self.env_train(), # self.create_envs(self.n_eval_envs, eval_env=True),
                 callback_on_new_best=save_vec_normalize,
                 best_model_save_path=self.save_path,
                 n_eval_episodes=self.n_eval_episodes,
@@ -432,19 +446,22 @@ class ExperimentManager(object):
             self.callbacks.append(eval_callback)
 
     @staticmethod
-    def is_atari(env_id: str) -> bool:
-        entry_point = gym.envs.registry.env_specs[env_id].entry_point
-        return "AtariEnv" in str(entry_point)
+    def is_atari(env_name: str) -> bool:
+        #entry_point = gym.envs.registry.env_specs[env_name].entry_point
+        #return "AtariEnv" in str(entry_point)
+        return False
 
     @staticmethod
-    def is_bullet(env_id: str) -> bool:
-        entry_point = gym.envs.registry.env_specs[env_id].entry_point
-        return "pybullet_envs" in str(entry_point)
+    def is_bullet(env_name: str) -> bool:
+        #entry_point = gym.envs.registry.env_specs[env_name].entry_point
+        #return "pybullet_envs" in str(entry_point)
+        return False
 
     @staticmethod
-    def is_robotics_env(env_id: str) -> bool:
-        entry_point = gym.envs.registry.env_specs[env_id].entry_point
-        return "gym.envs.robotics" in str(entry_point) or "panda_gym.envs" in str(entry_point)
+    def is_robotics_env(env_name: str) -> bool:
+        #entry_point = gym.envs.registry.env_specs[env_name].entry_point
+        #return "gym.envs.robotics" in str(entry_point) or "panda_gym.envs" in str(entry_point)
+        return False
 
     def _maybe_normalize(self, env: VecEnv, eval_env: bool) -> VecEnv:
         """
@@ -456,7 +473,7 @@ class ExperimentManager(object):
         :return:
         """
         # Pretrained model, load normalization
-        path_ = os.path.join(os.path.dirname(self.trained_agent), self.env_id)
+        path_ = os.path.join(os.path.dirname(self.trained_agent), self.env_name)
         path_ = os.path.join(path_, "vecnormalize.pkl")
 
         if os.path.exists(path_):
@@ -485,70 +502,70 @@ class ExperimentManager(object):
             env = VecNormalize(env, **local_normalize_kwargs)
         return env
 
-    def create_envs(self, n_envs: int, eval_env: bool = False, no_log: bool = False) -> VecEnv:
-        """
-        Create the environment and wrap it if necessary.
-
-        :param n_envs:
-        :param eval_env: Whether is it an environment used for evaluation or not
-        :param no_log: Do not log training when doing hyperparameter optim
-            (issue with writing the same file)
-        :return: the vectorized environment, with appropriate wrappers
-        """
-        # Do not log eval env (issue with writing the same file)
-        log_dir = None if eval_env or no_log else self.save_path
-
-        monitor_kwargs = {}
-        # Special case for GoalEnvs: log success rate too
-        if "Neck" in self.env_id or self.is_robotics_env(self.env_id) or "parking-v0" in self.env_id:
-            monitor_kwargs = dict(info_keywords=("is_success",))
-
-        # On most env, SubprocVecEnv does not help and is quite memory hungry
-        # therefore we use DummyVecEnv by default
-        env = make_vec_env(
-            env_id=self.env_id,
-            n_envs=n_envs,
-            seed=self.seed,
-            env_kwargs=self.env_kwargs,
-            monitor_dir=log_dir,
-            wrapper_class=self.env_wrapper,
-            vec_env_cls=self.vec_env_class,
-            vec_env_kwargs=self.vec_env_kwargs,
-            monitor_kwargs=monitor_kwargs,
-        )
-
-        # Wrap the env into a VecNormalize wrapper if needed
-        # and load saved statistics when present
-        env = self._maybe_normalize(env, eval_env)
-
-        # Optional Frame-stacking
-        if self.frame_stack is not None:
-            n_stack = self.frame_stack
-            env = VecFrameStack(env, n_stack)
-            if self.verbose > 0:
-                print(f"Stacking {n_stack} frames")
-
-        if not is_vecenv_wrapped(env, VecTransposeImage):
-            wrap_with_vectranspose = False
-            if isinstance(env.observation_space, gym.spaces.Dict):
-                # If even one of the keys is a image-space in need of transpose, apply transpose
-                # If the image spaces are not consistent (for instance one is channel first,
-                # the other channel last), VecTransposeImage will throw an error
-                for space in env.observation_space.spaces.values():
-                    wrap_with_vectranspose = wrap_with_vectranspose or (
-                        is_image_space(space) and not is_image_space_channels_first(space)
-                    )
-            else:
-                wrap_with_vectranspose = is_image_space(env.observation_space) and not is_image_space_channels_first(
-                    env.observation_space
-                )
-
-            if wrap_with_vectranspose:
-                if self.verbose >= 1:
-                    print("Wrapping the env in a VecTransposeImage.")
-                env = VecTransposeImage(env)
-
-        return env
+#    def create_envs(self, n_envs: int, eval_env: bool = False, no_log: bool = False) -> VecEnv:
+#        """
+#        Create the environment and wrap it if necessary.
+#
+#        :param n_envs:
+#        :param eval_env: Whether is it an environment used for evaluation or not
+#        :param no_log: Do not log training when doing hyperparameter optim
+#            (issue with writing the same file)
+#        :return: the vectorized environment, with appropriate wrappers
+#        """
+#        # Do not log eval env (issue with writing the same file)
+#        log_dir = None if eval_env or no_log else self.save_path
+#
+#        monitor_kwargs = {}
+#        # Special case for GoalEnvs: log success rate too
+#        if "Neck" in self.env_name or self.is_robotics_env(self.env_name) or "parking-v0" in self.env_name:
+#            monitor_kwargs = dict(info_keywords=("is_success",))
+#
+#        # On most env, SubprocVecEnv does not help and is quite memory hungry
+#        # therefore we use DummyVecEnv by default
+#        env = make_vec_env(
+#            env_name=self.env_name,
+#            n_envs=n_envs,
+#            seed=self.seed,
+#            env_kwargs=self.env_kwargs,
+#            monitor_dir=log_dir,
+#            wrapper_class=self.env_wrapper,
+#            vec_env_cls=self.vec_env_class,
+#            vec_env_kwargs=self.vec_env_kwargs,
+#            monitor_kwargs=monitor_kwargs,
+#        )
+#
+#        # Wrap the env into a VecNormalize wrapper if needed
+#        # and load saved statistics when present
+#        env = self._maybe_normalize(env, eval_env)
+#
+#        # Optional Frame-stacking
+#        if self.frame_stack is not None:
+#            n_stack = self.frame_stack
+#            env = VecFrameStack(env, n_stack)
+#            if self.verbose > 0:
+#                print(f"Stacking {n_stack} frames")
+#
+#        if not is_vecenv_wrapped(env, VecTransposeImage):
+#            wrap_with_vectranspose = False
+#            if isinstance(env.observation_space, gym.spaces.Dict):
+#                # If even one of the keys is a image-space in need of transpose, apply transpose
+#                # If the image spaces are not consistent (for instance one is channel first,
+#                # the other channel last), VecTransposeImage will throw an error
+#                for space in env.observation_space.spaces.values():
+#                    wrap_with_vectranspose = wrap_with_vectranspose or (
+#                        is_image_space(space) and not is_image_space_channels_first(space)
+#                    )
+#            else:
+#                wrap_with_vectranspose = is_image_space(env.observation_space) and not is_image_space_channels_first(
+#                    env.observation_space
+#                )
+#
+#            if wrap_with_vectranspose:
+#                if self.verbose >= 1:
+#                    print("Wrapping the env in a VecTransposeImage.")
+#                env = VecTransposeImage(env)
+#
+#        return env
 
     def _load_pretrained_agent(self, hyperparams: Dict[str, Any], env: VecEnv) -> BaseAlgorithm:
         # Continue training
@@ -619,7 +636,7 @@ class ExperimentManager(object):
         kwargs.update(sampled_hyperparams)
 
         model = ALGOS[self.algo](
-            env=self.create_envs(self.n_envs, no_log=True),
+            env=self.env_train(), # env=self.create_envs(self.n_envs, no_log=True),
             tensorboard_log=None,
             # We do not seed the trial
             seed=None,
@@ -629,7 +646,9 @@ class ExperimentManager(object):
 
         model.trial = trial
 
-        eval_env = self.create_envs(n_envs=self.n_eval_envs, eval_env=True)
+        #eval_env = self.create_envs(n_envs=self.n_eval_envs, eval_env=True)
+        #eval_env = self.env_eval() 
+        eval_env = self.env_train()
 
         optuna_eval_freq = int(self.n_timesteps / self.n_evaluations)
         # Account for parallel envs
@@ -726,7 +745,7 @@ class ExperimentManager(object):
             print(f"    {key}: {value}")
 
         report_name = (
-            f"report_{self.env_id}_{self.n_trials}-trials-{self.n_timesteps}"
+            f"report_{self.env_name}_{self.n_trials}-trials-{self.n_timesteps}"
             f"-{self.sampler}-{self.pruner}_{int(time.time())}"
         )
 

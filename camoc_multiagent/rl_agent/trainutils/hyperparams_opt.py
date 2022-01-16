@@ -5,7 +5,7 @@ import optuna
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 from torch import nn as nn
 
-from utils import linear_schedule
+from rl_agent.trainutils import linear_schedule
 
 
 def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
@@ -484,10 +484,10 @@ HYPERPARAMS_SAMPLER = {
     "a2c": sample_a2c_params,
     "ddpg": sample_ddpg_params,
     "dqn": sample_dqn_params,
-    "qrdqn": sample_qrdqn_params,
+#    "qrdqn": sample_qrdqn_params,
     "sac": sample_sac_params,
-    "tqc": sample_tqc_params,
+#    "tqc": sample_tqc_params,
     "ppo": sample_ppo_params,
     "td3": sample_td3_params,
-    "trpo": sample_trpo_params,
+#    "trpo": sample_trpo_params,
 }

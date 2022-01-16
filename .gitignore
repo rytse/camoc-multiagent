@@ -1,5 +1,6 @@
 # Saved policies
 *.zip
+logs/
 
 ## Python
 # Byte-compiled / optimized / DLL files
