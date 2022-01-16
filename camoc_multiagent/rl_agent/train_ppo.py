@@ -25,7 +25,6 @@ def train_ppo(env_train, env_eval, env_name):
     parser = argparse.ArgumentParser()
 #    parser.add_argument("--algo", help="RL Algorithm", default="ppo", type=str, required=False, choices=list(ALGOS.keys()))
 #    parser.add_argument("--env", type=str, default="CartPole-v1", help="environment ID")
-    parser.add_argument("-tb", "--tensorboard-log", help="Tensorboard log dir", default="", type=str)
     parser.add_argument("-i", "--trained-agent", help="Path to a pretrained agent to continue training", default="", type=str)
     parser.add_argument(
         "--truncate-last-trajectory",
@@ -57,6 +56,7 @@ def train_ppo(env_train, env_eval, env_name):
         "--save-replay-buffer", help="Save the replay buffer too (when applicable)", action="store_true", default=False
     )
     parser.add_argument("-f", "--log-folder", help="Log folder", type=str, default="rl_agent/logs")
+    parser.add_argument("-tb", "--tensorboard-log", help="Tensorboard log dir", default="rl_agent/logs/tb", type=str)
     parser.add_argument("--seed", help="Random generator seed", type=int, default=-1)
     parser.add_argument("--vec-env", help="VecEnv type", type=str, default="dummy", choices=["dummy", "subproc"])
     parser.add_argument(
