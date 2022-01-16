@@ -7,7 +7,7 @@ from .scenarios.swarm_cover import Scenario
 
 
 class raw_env(SimpleEnv):
-    def __init__(self, N=3, local_ratio=0.5, max_cycles=25, continuous_actions=False):
+    def __init__(self, N=5, local_ratio=0.25, max_cycles=25, continuous_actions=True):
         assert 0. <= local_ratio <= 1., "local_ratio is a proportion. Must be between 0 and 1."
         scenario = Scenario()
         world = scenario.make_world(N)
