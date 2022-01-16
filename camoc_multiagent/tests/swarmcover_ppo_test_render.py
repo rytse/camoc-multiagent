@@ -4,8 +4,7 @@ from envs.swarmcover import swarm_cover_v1
 import supersuit as ss
 
 # Rendering
-env = swarm_cover_v1.env()
-env = ss.frame_stack_v1(env, 3)
+env = swarm_cover_v1.eval_env()
 model = PPO.load("./policies/swarmcover_ppo_policy")
 
 env.reset()
