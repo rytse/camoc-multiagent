@@ -4,8 +4,13 @@ import json
 from envs.swarmcover import swarm_cover_v1
 from rl_agent.tune_hyp import study
 
-TRAIN_STEPS = int(1e5)
-OPT_STEPS = 4
+# 7m38s
+# TRAIN_STEPS = int(1e6)
+# OPT_STEPS = 4
+
+# ~15 hr
+TRAIN_STEPS = int(1e7)
+OPT_STEPS = 50
 
 os.setpgrp()
 

@@ -1,1 +1,1 @@
-{"gamma": 0.99, "learning_rate": 2.34366204488962e-05, "ent_coef": 8.01937248081377e-07, "clip_range": 0.2, "gae_lambda": 0.8, "max_grad_norm": 1, "vf_coef": 0.944631705305685, "log_std_init": -0.16347346228649018, "sde_sample_freq": 64}
+{"gamma": 0.9, "learning_rate": 0.005333412260515793, "ent_coef": 6.937597338357148e-07, "clip_range": 0.4, "gae_lambda": 0.99, "max_grad_norm": 0.5, "vf_coef": 0.9724464405101492, "log_std_init": -3.9632079431971605, "sde_sample_freq": 256}

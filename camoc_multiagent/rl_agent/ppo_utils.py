@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3 import PPO
 
@@ -17,7 +19,8 @@ def train_ppo(env, name, total_timesteps, **kwargs):
                 )
 
     model.learn(total_timesteps=total_timesteps)
-    model.save(f"./policies/{name}")
+    now = datetime.now()
+    model.save(f"./policies/{name}_{now.strftime('%Y_%m_%d_%H_%M')}")
 
     return model
 
