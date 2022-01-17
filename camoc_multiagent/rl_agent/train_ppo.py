@@ -162,11 +162,12 @@ def train_ppo(env_train, env_eval, env_name):
         ppo_factory,
         'ppo',
         env_train,
-        env_eval,
+        env_train,
         env_id,
         args.log_folder,
         args.tensorboard_log,
-        args.n_timesteps,
+        #args.n_timesteps,
+        100,
         args.eval_freq,
         args.eval_episodes,
         args.save_freq,
@@ -195,7 +196,8 @@ def train_ppo(env_train, env_eval, env_name):
     )
 
     # Prepare experiment and launch hyperparameter optimization if needed
-    model = exp_manager.setup_experiment()
+    #model = exp_manager.setup_experiment()
+    model = None
 
     # Normal training
     if model is not None:

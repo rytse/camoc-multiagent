@@ -1,6 +1,6 @@
 swarm_cover_v1:
   n_envs: 8
-  n_timesteps: !!float 1e5
+  n_timesteps: !!float 1e6
   policy: 'MlpPolicy'
   n_steps: 32
   batch_size: 256
