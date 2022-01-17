@@ -14,9 +14,10 @@ OPT_STEPS = 50
 
 os.setpgrp()
 
-env = swarm_cover_v1.train_env()
+env_train = swarm_cover_v1.train_env()
+env_eval = swarm_cover_v1.train_env()  # use another copy of the same env stack
 
-hyp = study(env, "swarmcover_ppo", TRAIN_STEPS, OPT_STEPS)
+hyp = study(env_train, env_eval, "swarmcover_ppo", TRAIN_STEPS, OPT_STEPS)
 
 json = json.dumps(hyp)
 with open("./rl_agent/hyperparams/swarmcover_ppo_hyp.json", "w") as f:

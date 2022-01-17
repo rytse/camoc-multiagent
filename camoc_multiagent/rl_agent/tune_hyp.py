@@ -28,7 +28,7 @@ def _linear_schedule(initial_value: Union[float, str]) -> Callable[[float], floa
 
 
 # Hold the optuna study with the environment and name passed in
-def study(env, name, train_timesteps, optimizer_timesteps):
+def study(env_train, env_eval, name, train_timesteps, optimizer_timesteps):
 
     # Optuna objective function that has local access to env and name 
     def objective(trial):
@@ -72,7 +72,7 @@ def study(env, name, train_timesteps, optimizer_timesteps):
             )
         }
 
-        model = train_ppo(env, name, train_timesteps, **ppo_hyperparams)
+        model = train_ppo(env_train, env_eval, name, train_timesteps, **ppo_hyperparams)
 
         return model._logger.name_to_value['train/loss']
 

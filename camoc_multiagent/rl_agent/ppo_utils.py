@@ -2,15 +2,26 @@ from datetime import datetime
 
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import EvalCallback
 
 
-def train_ppo(env, name, total_timesteps, **kwargs):
+def train_ppo(env_train, env_eval, name, total_timesteps, **kwargs):
+    env_eval.reset()
+    savebest_cb = EvalCallback(
+        eval_env=env_eval,
+        best_model_save_path=f'./policies/{name}_best_model.zip',
+        log_path=f'./logs/{name}_eval_log.txt',
+        eval_freq=500,
+        deterministic=True,
+        render=False
+    )
+
     try:
         model = PPO.load(f"./policies/{name}")
-        model.set_env(env)
+        model.set_env(env_train)
     except Exception:
         model = PPO(MlpPolicy,
-                    env,
+                    env_train,
                     verbose=3,
                     n_steps=256,
                     batch_size=256,
@@ -18,19 +29,19 @@ def train_ppo(env, name, total_timesteps, **kwargs):
                     **kwargs
                 )
 
-    model.learn(total_timesteps=total_timesteps)
+    model.learn(total_timesteps=total_timesteps, callback=savebest_cb)
     now = datetime.now()
     model.save(f"./policies/{name}_{now.strftime('%Y_%m_%d_%H_%M')}")
 
     return model
 
 
-def eval_ppo(env, name):
+def eval_ppo(env_eval, name):
     model = PPO.load("./policies/swarmcover_ppo_policy")
 
-    env.reset()
-    for agent in env.agent_iter():
-        obs, reward, done, info = env.last()
+    env_eval.reset()
+    for agent in env_eval.agent_iter():
+        obs, reward, done, info = env_eval.last()
         act = model.predict(obs, deterministic=True)[0] if not done else None
-        env.step(act)
-        env.render()
+        env_eval.step(act)
+        env_eval.render()
