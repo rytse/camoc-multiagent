@@ -1,9 +1,7 @@
 import numpy as np
 
 from pettingzoo.mpe._mpe_utils.core import Agent, World, Landmark
-#from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from pettingzoo.mpe.scenarios.simple_spread import Scenario as SimpleSpreadScenario
-#from core import Target
 
 class Scenario(SimpleSpreadScenario):
     def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1.5, N_THETA=10):
@@ -28,20 +26,17 @@ class Scenario(SimpleSpreadScenario):
             landmark.collide = True  # you can bounce off if you get too close
             landmark.movable = False
 
-        # Generate mesh that approximates the target
-        theta = np.linspace(0, 2*np.pi, N_THETA)
-        xx = LANDMARK_SIZE * np.cos(theta)
-        yy = LANDMARK_SIZE * np.sin(theta)
-        self.target_mesh = np.rollaxis(np.array([xx, yy]), 1)
-
         return world
 
 
     def global_reward(self, world):
-        rew = 0
-        in_place_mesh = self.target_mesh - world.landmarks[0].state.p_pos 
+        dist_penalty = 0
+        angles = np.zeros(len(world.agents))
 
-        for a in world.agents:
-            rew -= np.min(np.linalg.norm(in_place_mesh - a.state.p_pos))
+        for i, a in enumerate(world.agents):
+            diff_v = a.state.p_pos - world.landmarks[0].state.p_pos
 
-        return rew
+            dist_penalty -= np.linalg.norm(diff_v)
+            angles[i] = np.arctan2(diff_v[1], diff_v[0])
+
+        return -dist_penalty / (np.var(angles) + 1e-6)
