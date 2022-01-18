@@ -1,5 +1,8 @@
 import numpy as np
 
+def sqrt_ext(x):
+    return np.sqrt(x * np.sign(x)) * np.sign(x)
+
 def identity_factory():
     def identity(x):
         return x
@@ -20,7 +23,7 @@ def angle2cart_factory():
     '''
 
     def angle2cart(theta):
-        return np.array([np.cos(theta), np.sin(theta)])
+        return np.array([np.cos(theta), np.sin(theta)]).flatten()
 
     return angle2cart
 
@@ -42,7 +45,7 @@ def halfinterval2slack_factory(a):
     '''
 
     def halfinterval2slack(x):
-        return np.array([x, np.sqrt(a - x), np.sqrt(x)])
+        return np.array([x, sqrt_ext(a - x), sqrt_ext(x)]).flatten()
 
     return halfinterval2slack
 
@@ -64,7 +67,7 @@ def fullinterval2slack_factory(a):
     '''
 
     def fullinterval2slack(x):
-        return np.array([x, np.sqrt(a - x), np.sqrt(a + x)])
+        return np.array([x, sqrt_ext(a - x), sqrt_ext(a + x)]).flatten()
 
     return fullinterval2slack
 

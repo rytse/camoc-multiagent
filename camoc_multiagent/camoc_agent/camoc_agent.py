@@ -1,4 +1,5 @@
-import jax.numpy as np
+#import jax.numpy as np
+import numpy as np
 from jax import grad, jit, vmap
 
 class CAMOCAgent:
@@ -12,7 +13,7 @@ class CAMOCAgent:
     '''
 
     def __init__(self, g_constr, g_grad_constr=None, newton_iters=2,
-            _project_onto_mfd=None):
+            _project_onto_actions=None):
         self._g_constr = g_constr
         if g_grad_constr is None:
             self._g_grad_constr = grad(g_constr)
@@ -20,15 +21,19 @@ class CAMOCAgent:
             self._g_grad_constr = g_grad_constr
 
         self._newton_iters = newton_iters
-        self._project_onto_mfd = _project_onto_mfd
+        self._project_onto_actions = _project_onto_actions
 
         self._mpoints = np.array([])  # samples' locations on the manifold
         self._tmvecs = np.array([])  # samples' associated tangent vectors
 
 
     def add_samples(self, observations, actions):
-        self._mpoints.append(observations)
-        self._tmvecs.append(actions)
+        if self._mpoints.size == 0:
+            self._mpoints = observations
+            self._tmvecs = actions
+        else:
+            self._mpoints = np.vstack((self._mpoints, observations))
+            self._tmvecs = np.vstack((self._tmvecs, actions))
 
 
     def policy(self, obs):
@@ -51,9 +56,12 @@ class CAMOCAgent:
 
 
     def _project_onto_mfd(self, vhat):
+
+        breakpoint()
+
         ld = 0
         for i in range(self._newton_iters):
-            ggc = self.g_grad_constr(vhat) 
+            ggc = self._g_grad_constr(vhat) 
             dld = -self.g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
             ld += dld
 

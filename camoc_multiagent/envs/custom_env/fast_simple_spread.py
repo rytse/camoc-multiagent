@@ -19,12 +19,14 @@ from pettingzoo.utils.agent_selector import agent_selector
 class FastWorld:
     def __init__(self, n_agents: np.int, n_entities: np.int, entity_sizes: np.ndarray):
         self.n_agents = n_agents
+        self.n_landmarks = n_entities - n_agents
         self.n_entities = n_entities
         self.entity_sizes = entity_sizes
 
         # World parameters
         self.dt = 0.1
         self.damping = 0.25
+        self.maxspeed = 1.0
 
         self.dim_p = 2 # (x,y)
         self.contact_force = np.float32(1e2)
@@ -93,7 +95,7 @@ class FastWorld:
 
     @property
     def landmarks(self) -> np.ndarray:
-        return self.positions[self.n_agents+1:, :]
+        return self.positions[self.n_agents:, :]
 
     @property
     def agents(self) -> np.ndarray:
@@ -126,8 +128,12 @@ class FastWorld:
         dist_to_agents = dist_to_agents[agents_order]
         speed_to_agents = speed_to_agents[agents_order]
 
+        obs = np.concatenate([dist_to_targets, angles_to_targets, dist_to_agents[1:], speed_to_agents[1:]])
+
+
         # Don't forget that we included the agent itself in the list of others
-        return np.concatenate([dist_to_targets, angles_to_targets, dist_to_agents[1:], speed_to_agents[1:]])
+        return obs
+
 
     def reset(self, np_random) -> None:
         """
@@ -198,14 +204,13 @@ class FastSimpleEnv(AECEnv):
             scenario: FastScenario,
             world: FastWorld,
             max_cycles: int, 
-            continuous_actions: bool = False, 
+            continuous_actions: bool = True, 
             local_ratio: bool = None):
         super().__init__()
         self.seed()
         self.metadata = {'render.modes': ['human', 'rgb_array']}
 
-        # This should always be false
-        self.continuous_actions = False
+        self.continuous_actions = True
 
         self.max_cycles = max_cycles
         self.scenario = scenario
@@ -230,7 +235,7 @@ class FastSimpleEnv(AECEnv):
         self.n_agents = self.world.agents.shape[0]
 
         # Initialize action spaces
-        self.action_spaces: Dict(int, spaces.Discrete) = dict() 
+        self.action_spaces: Dict(int, spaces.Box) = dict()
         self.observation_spaces: Dict(int,spaces.Box) = dict()
         space_dim = self.world.dim_p * 2 + 1
         # We don't set a communication channel
@@ -239,17 +244,32 @@ class FastSimpleEnv(AECEnv):
         for i in range(len(self.world.agents)):
             obs_dim = len(self.scenario.observation(i, self.world))
             state_dim += obs_dim
-            # not conintuous
-            self.action_spaces[i] = spaces.Discrete(space_dim)
-            self.observation_spaces[i] = \
-                spaces.Box(low=-np.float32(np.inf), high=+np.float32(np.inf), shape=(obs_dim,), dtype=np.float32)
-            
-        
+
+            self.action_spaces[i] = spaces.Box(low=np.array([-np.pi, 0]),
+                                               high=np.array([np.pi, 1]),
+                                               dtype=np.float32)
+            # Observations:
+            obsmin = np.concatenate([[-np.inf] * self.world.n_landmarks,
+                                    [-np.pi] * self.world.n_landmarks, 
+                                    [-np.inf] * (self.world.n_agents - 1),
+                                    [0] * (self.world.n_agents - 1)])
+
+            obsmax = np.concatenate([[np.inf] * self.world.n_landmarks,
+                                    [np.pi] * self.world.n_landmarks, 
+                                    [np.inf] * (self.world.n_agents - 1),
+                                    [self.world.maxspeed * 2] *
+                                    (self.world.n_agents - 1)])
+
+            self.observation_spaces[i] = spaces.Box(low=obsmin,
+                                                    high=obsmax,
+                                                    dtype=np.float32)
+
+
         # state space is the sum of all the local observation spaces it seems? shape wise taht is
         self.state_space = spaces.Box(low=-np.float32(np.inf), high=+np.float32(np.inf), shape=(state_dim,), dtype=np.float32)   
 
         self.steps: int = 0
-        self.current_actions: List[Optional[spaces.Discrete]] = [None] * self.n_agents
+        self.current_actions: List[Optional[spaces.Box]] = [None] * self.n_agents
 
         self.viewer = None
 
@@ -258,7 +278,7 @@ class FastSimpleEnv(AECEnv):
         return self.observation_spaces[int(agent_index)]
 
     
-    def action_space(self, agent_index: str) -> spaces.Discrete:
+    def action_space(self, agent_index: str) -> spaces.Box:
         return self.action_spaces[int(agent_index)]
     
     def seed(self, seed: Optional[int] = None) -> None:
@@ -296,50 +316,20 @@ class FastSimpleEnv(AECEnv):
         # TODO: current_actions??
         self.current_actions = [None] * self.n_agents
 
+#    def agent_iter():
+#        yield
+
     def _execute_world_step(self):
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
-            scenario_action = []
-            # We don't need to ask if the agent is movable
-            mdim = self.world.dim_p * 2 + 1
-            # We don't do continuous actions
 
-            # Literally wtf is this
-            scenario_action.append(action % mdim)
-            action //= mdim
+            self.world.ctrl_thetas[i] = action[0]
+            self.world.ctrl_speeds[i] = action[1]
 
-            #if not agent.silent... we don't store that parameter
-            scenario_action.append(action)
-            # Need to fix this too
-            self._set_action(scenario_action, i, self.action_spaces[i])
-        
         self.world.step()
 
         for agent in self.agents:
             self.rewards[agent] = self.scenario.global_reward(self.world)
-        
-
-    def _set_action(self, action: List[int], agent_index: int, action_space, time=None)->None:
-        # All our agents are movable
-        # All our actions are discrete currently
-        if action[0] == 1:
-            self.world.agent_actions[agent_index][0] = 1.0
-        if action[0] == 2:
-            self.world.agent_actions[agent_index][0] = -1.0
-        if action[0] == 3:
-            self.world.agent_actions[agent_index][1] = -1.0
-        if action[0] == 4:
-            self.world.agent_actions[agent_index][1] = -1.0
-
-        # We do not currently have a concept of acceleration
-        sensitivity = 5.0
-        self.world.agent_actions[agent_index] *= sensitivity
-        action = action[2:]
-
-        # Our agents are never silent or continuous, and do not communicate
-
-        # To be honest I have no clue why we are passing what we are 
-        assert len(action) == 0
 
 
     def step(self, action):
