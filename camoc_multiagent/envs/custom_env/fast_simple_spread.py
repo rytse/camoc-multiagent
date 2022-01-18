@@ -14,46 +14,28 @@ from scipy.spatial import distance_matrix
 class FastScenario:
     def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1.5, N_THETA=10):
         world = FastWorld(N, 1, AGENT_SIZE, LANDMARK_SIZE)
-        # set any world properties first
-        #world.collaborative = True
-
-        # add agents
-
-        # add landmarks
-
-        # Generate mesh that approximates the target
-        theta = np.linspace(0, 2*np.pi, N_THETA)
-        xx = LANDMARK_SIZE * np.cos(theta)
-        yy = LANDMARK_SIZE * np.sin(theta)
-        self.target_mesh = np.rollaxis(np.array([xx, yy]), 1)
-
         return world
 
     def global_reward(self, world):
-        rew = 0
-
         '''
-        agent_thetas_relative_to_landmark = []
-        for a in world.agents:
-            rel_x,rel_y = a.pos - world.landmarks[0].pos
-            theta_lm = np.arctan2(rel_y, rel_x)
-            agent_thetas_relative_to_landmark.append(theta_lm)
-
-            nose_pos = a.pos[:2] + a.size * np.array([np.cos(a.theta), np.sin(a.theta)])
-            rew -= np.min(np.linalg.norm(in_place_mesh - nose_pos))
-
-        # We want to encourage them to spread out
-        # Ideally all agents equally spaced from each each other
-        # with first and last agents 
-        
-        # we want the largest spread possible
-        variance = np.var(agent_thetas_relative_to_landmark)
-        variance += np.float(1e-6) # blowing up is bad
-        rew /= variance
+        Calculate global reward for the world in its current state.
         '''
-        
 
-        return rew
+        # Get distance penalty
+        headings = np.array([np.cos(world.ctrl_thetas), np.sin(world.ctrl_thetas)]) 
+        headpos = world.positions + headings * world.entity_sizes * world.movables
+        dists = distance_matrix(headpos, headpos)
+        mask = world.movables[:, None] * world.movables[None, :]
+        relevant_dists = dists * mask
+        dist_penalty = np.sum(relevant_dists[:])
+
+        # Get coverage reward
+        diffmat = world.positions[:, None, :] - world.positions
+        rel_thetas = np.arctan2(diffmat[:, :, 1], diffmat[:, :, 0])
+        coverage_reward = np.var(rel_thetas)
+
+        # Combine the two objectives
+        return -dist_penalty / (coverage_reward + 1e-6)
     
 
     def reset_world(self, world, np_random):
