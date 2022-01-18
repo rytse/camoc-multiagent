@@ -1,7 +1,7 @@
 import jax.numpy as np
 from jax import grad, jit, vmap
 
-class CAMOC_Agent:
+class CAMOCAgent:
     '''
     Agent that computes policies by interpolating and projecting actions
     sampled from another (pre-trained) agent.
