@@ -133,11 +133,14 @@ class FastWorld:
         """
         WARNING: DOES NOT RETURN COMMUNICATION
         """
-        entity_pos: np.ndarray = self.landmarks - self.agents[agent_index]
-        other_pos = np.delete(self.agents, agent_index)
-        other_pos -= self.agents[agent_index]
-        return np.concatenate(self.velocities[agent_index] + [self.agents[agent_index]] + entity_pos + other_pos)
         
+        # Agents / landmarks have no intrinsic order, so we sort by distance
+        dist_to_targets = np.sort(np.linalg.norm(self.agents[agent_index] - self.landmarks, axis=1))
+        dist_to_agents = np.sort(np.linalg.norm(self.agents[agent_index] - self.agents, axis=1))
+        speed_to_agents = np.sort(np.linalg.norm(self.agent_velocities[agent_index] - self.agent_velocities, axis=1))
+
+        # Don't forget that we included the agent itself in the list of others
+        return np.concatenate([dist_to_targets[1:], dist_to_agents[1:], speed_to_agents[1:]])
 
 
     def reset(self, np_random) -> None:
