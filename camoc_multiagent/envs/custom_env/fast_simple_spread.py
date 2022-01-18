@@ -2,67 +2,15 @@ from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from pettingzoo.utils.env import AECEnv
 import numpy as np
 from gym.utils import seeding
-from typing import Optional, int, List
+from typing import Optional, List, Dict
 from itertools import combinations
 from scipy.spatial import distance_matrix
+from gym import spaces
+from pettingzoo.utils.agent_selector import agent_selector
 
 
 
 
-
-# Could inherit base Scenario
-class FastScenario:
-    def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1.5, N_THETA=10):
-        world = FastWorld(N, 1, AGENT_SIZE, LANDMARK_SIZE)
-        # set any world properties first
-        #world.collaborative = True
-
-        # add agents
-
-        # add landmarks
-
-        # Generate mesh that approximates the target
-        theta = np.linspace(0, 2*np.pi, N_THETA)
-        xx = LANDMARK_SIZE * np.cos(theta)
-        yy = LANDMARK_SIZE * np.sin(theta)
-        self.target_mesh = np.rollaxis(np.array([xx, yy]), 1)
-
-        return world
-
-    def global_reward(self, world):
-        rew = 0
-
-        '''
-        agent_thetas_relative_to_landmark = []
-        for a in world.agents:
-            rel_x,rel_y = a.pos - world.landmarks[0].pos
-            theta_lm = np.arctan2(rel_y, rel_x)
-            agent_thetas_relative_to_landmark.append(theta_lm)
-
-            nose_pos = a.pos[:2] + a.size * np.array([np.cos(a.theta), np.sin(a.theta)])
-            rew -= np.min(np.linalg.norm(in_place_mesh - nose_pos))
-
-        # We want to encourage them to spread out
-        # Ideally all agents equally spaced from each each other
-        # with first and last agents 
-        
-        # we want the largest spread possible
-        variance = np.var(agent_thetas_relative_to_landmark)
-        variance += np.float(1e-6) # blowing up is bad
-        rew /= variance
-        '''
-        
-
-        return rew
-    
-
-    def reset_world(self, world, np_random):
-        world.reset(np_random)
-
-
-    def observation(self, agent_index: int, world) -> np.ndarray:
-        return world.observation(self, agent_index)
-        
 
 
 
@@ -101,16 +49,20 @@ class FastWorld:
 
         self.sizemat = self.entity_sizes[..., None] * self.entity_sizes[None, ...]
         
-
+        
         
 
     def step(self) -> None:
-        angle: np.ndarray = np.array([np.cos(self.ctrl_thetas), np.sin(self.ctrl_thetas)])
-        self.velocities = self.ctrl_speeds * angle * self.movables
+        # heading.shape = 2,6,2
+        heading: np.ndarray = np.array([np.cos(self.ctrl_thetas), np.sin(self.ctrl_thetas)]).T
+        #print(f"heading: {heading.shape}, velocity: {self.velocities.shape} ")
+        #print(f"ctrl_speed: {self.ctrl_speeds.shape} movables: {self.movables.shape}")
+        self.velocities = (self.ctrl_speeds * self.movables)[:, None] * heading
+        assert self.velocities.shape == (6,2), "self.velocities shape mutated"
 
         # 2 detect collisons
         dist_matrix = distance_matrix(self.positions, self.positions)
-        collisions: np.ndarray = dist_matrix < self.sizematrix
+        collisions: np.ndarray = dist_matrix < self.sizemat
         
         # prolly a smarter way to check
         if np.any(collisions):
@@ -122,10 +74,14 @@ class FastWorld:
             diffmat: np.ndarray = self.positions[:, None, :] - self.positions  # skew symetric
             
             forces_v = diffmat * forces_s[..., None]
-
+            
 
             # 4 integrate collsion forces
-            self.velocities += np.sum(forces_v, ax=0) * self.dt
+            s = np.sum(forces_v, axis=0)
+            #print(f"np.sum(forces_v, axis=0).shape {s.T.shape}")
+            #print(f"self.velocities.shape {self.velocities.shape}")
+            #print(f"self.dt {self.dt}")
+            self.velocities += np.sum(forces_v, axis=0) * self.dt
 
         # 5 integrate damping
         self.velocities -= self.velocities * (1 - self.damping)
@@ -137,47 +93,120 @@ class FastWorld:
 
     @property
     def landmarks(self) -> np.ndarray:
-        return self.positions[self.n_agents+1:]
+        return self.positions[self.n_agents+1:, :]
 
     @property
     def agents(self) -> np.ndarray:
-        return self.positions[:self.n_agents]
+        return self.positions[:self.n_agents, :]
 
     @property
     def agent_velocities(self) -> np.ndarray:
-        return self.velocities[:self.n_agents]
+        return self.velocities[:self.n_agents, :]
 
     def observation(self, agent_index) -> np.ndarray:
         """
         WARNING: DOES NOT RETURN COMMUNICATION
         """
-        entity_pos: np.ndarray = self.landmarks - self.agents[agent_index]
-        other_pos = np.delete(self.agents, agent_index)
-        other_pos -= self.agents[agent_index]
-        return np.concatenate(self.velocities[agent_index] + [self.agents[agent_index]] + entity_pos + other_pos)
-        
+        # Calculate distances and velocities
+        vec_to_targets = self.landmarks - self.agents[agent_index]  # targets
+        dist_to_targets = np.linalg.norm(vec_to_targets, axis=1)
+        vec_to_agents = self.agents - self.agents[agent_index]      # agents
+        dist_to_agents = np.linalg.norm(vec_to_agents, axis=1)
+        vel_to_agents = self.agent_velocities[agent_index] - self.agent_velocities
+        speed_to_agents = np.linalg.norm(vel_to_agents, axis=1)
 
+        # Calculate angles to landmarks
+        angles_to_targets = np.arctan2(vec_to_targets[:, 1], vec_to_targets[:, 0])
+
+        # Agents / landmarks have no intrinsic order, so we sort by distance
+        targets_order = np.argsort(dist_to_targets)             # targets
+        dist_to_targets = dist_to_targets[targets_order]
+        angles_to_targets = angles_to_targets[targets_order]
+        agents_order = np.argsort(dist_to_agents)               # agents
+        dist_to_agents = dist_to_agents[agents_order]
+        speed_to_agents = speed_to_agents[agents_order]
+
+        # Don't forget that we included the agent itself in the list of others
+        return np.concatenate([dist_to_targets, angles_to_targets, dist_to_agents[1:], speed_to_agents[1:]])
 
     def reset(self, np_random) -> None:
         """
         Resets the world
         """
-        self.positions =  np_random.unform(-1, +1, shape=(self.positions.shape))
+        self.positions =  np_random.uniform(-1, +1, size=(self.positions.shape))
         self.velocities[:] = 0
         self.agent_actions[:] = 0
+        
+        
+# Could inherit base Scenario
+class FastScenario:
+    def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1.5, N_THETA=10):
+        entity_sizes: np.ndarray = np.array([AGENT_SIZE for _ in range(N)] + [LANDMARK_SIZE])
+
+        world = FastWorld(N, N+1, entity_sizes)
+        # set any world properties first
+        #world.collaborative = True
+
+        # add agents
+
+        # add landmarks
+
+        # Generate mesh that approximates the target
+        theta = np.linspace(0, 2*np.pi, N_THETA)
+        xx = LANDMARK_SIZE * np.cos(theta)
+        yy = LANDMARK_SIZE * np.sin(theta)
+        self.target_mesh = np.rollaxis(np.array([xx, yy]), 1)
+
+        return world
+
+    def global_reward(self, world):
+        '''
+        Calculate global reward for the world in its current state.
+        '''
+
+        # Get distance penalty
+        headings = np.array([np.cos(world.ctrl_thetas), np.sin(world.ctrl_thetas)]).T 
+        headpos = world.positions + headings * (world.entity_sizes * world.movables)[:, None]
+
+        dists = distance_matrix(headpos, headpos)
+        mask = world.movables[:, None] * world.movables[None, :]
+        relevant_dists = dists * mask
+        dist_penalty = np.sum(relevant_dists[:])
+
+        # Get coverage reward
+        diffmat = world.positions[:, None, :] - world.positions
+        rel_thetas = np.arctan2(diffmat[:, :, 1], diffmat[:, :, 0])
+        coverage_reward = np.var(rel_thetas)
+        #print(type(-dist_penalty / (coverage_reward + 1e-6)))
+        #sys.quit()
+        # Combine the two objectives
+        return -dist_penalty / (coverage_reward + 1e-6)
+    
+
+    def reset_world(self, world, np_random):
+        world.reset(np_random)
+
+
+    def observation(self, agent_index: int, world: FastWorld) -> np.ndarray:
+        return world.observation(agent_index)
         
 
 
 
-class FastSimpleEnv:
+class FastSimpleEnv(AECEnv):
     def __init__(self,
             scenario: FastScenario,
             world: FastWorld,
             max_cycles: int, 
             continuous_actions: bool = False, 
             local_ratio: bool = None):
-        
+        super().__init__()
         self.seed()
+        self.metadata = {'render.modes': ['human', 'rgb_array']}
+
+        # This should always be false
+        self.continuous_actions = False
+
         self.max_cycles = max_cycles
         self.scenario = scenario
         self.world = world
@@ -186,46 +215,84 @@ class FastSimpleEnv:
 
         self.scenario.reset_world(self.world, self.np_random)
         
-        self.action_spaces = None 
-        self.observation_spaces = None
 
-        self.possible_agents = self.world.agents.copy()
+        self.agents: List[str] = [str(i) for i in range(self.world.n_agents)] #list(range(self.world.n_agents))
+        self.possible_agents = self.agents[:]
+        # Yes this is stupid... copying their old structure for now
+        self._index_map = {agent: idx for idx, agent in enumerate(self.agents)}
+        self._agent_selector = agent_selector(self.agents)
+
+
+        
+
+        
+
         self.n_agents = self.world.agents.shape[0]
 
-        # TODO: Initialize action spaces
+        # Initialize action spaces
+        self.action_spaces: Dict(int, spaces.Discrete) = dict() 
+        self.observation_spaces: Dict(int,spaces.Box) = dict()
+        space_dim = self.world.dim_p * 2 + 1
+        # We don't set a communication channel
+        # iterate over agents
+        state_dim = 0
+        for i in range(len(self.world.agents)):
+            obs_dim = len(self.scenario.observation(i, self.world))
+            state_dim += obs_dim
+            # not conintuous
+            self.action_spaces[i] = spaces.Discrete(space_dim)
+            self.observation_spaces[i] = \
+                spaces.Box(low=-np.float32(np.inf), high=+np.float32(np.inf), shape=(obs_dim,), dtype=np.float32)
+            
+        
+        # state space is the sum of all the local observation spaces it seems? shape wise taht is
+        self.state_space = spaces.Box(low=-np.float32(np.inf), high=+np.float32(np.inf), shape=(state_dim,), dtype=np.float32)   
 
-    def observation_space(self, agent: int):
-        raise Exception("Observation space funciton not implemented")
+        self.steps: int = 0
+        self.current_actions: List[Optional[spaces.Discrete]] = [None] * self.n_agents
 
+        self.viewer = None
 
-    def action_spaces(self, agent: int):
-        raise Exception("Action space funciton not implemented not implemented")
     
-    def seed(self, seed: Optional[int] = None):
+    def observation_space(self, agent_index: str) -> spaces.Box:
+        return self.observation_spaces[int(agent_index)]
+
+    
+    def action_space(self, agent_index: str) -> spaces.Discrete:
+        return self.action_spaces[int(agent_index)]
+    
+    def seed(self, seed: Optional[int] = None) -> None:
         self.np_random, seed = seeding.np_random(seed)
 
     
-    def observe(self, agent: int):
-        return self.scenario.observation(agent, self.world)
+    def observe(self, agent: str) -> np.ndarray:
+        # When I rewrite supersuit I won't have to pass strings
+        # Literally what the fuck
+        return self.scenario.observation(int(agent), self.world)
     
     def state(self):
-        raise Exception("State not implented yet...")
+        states = tuple(
+            self.scenario.observation(self.world.agents[agent], self.world).astype(np.float32) 
+            for agent in self.possible_agents)
+        return np.concatenate(states, axis=None)
     
     def reset(self):
         self.scenario.reset_world(self.world, self.np_random)
 
         self.agents = self.possible_agents[:]
-        self.rewards = np.zeros(shape=self.agents.shape)
-        self._cumulative_rewards = np.zeros(shape=self.agents.shape)
+        self.rewards = {name: 0. for name in self.agents}
+
+        self._cumulative_rewards = {name: 0. for name in self.agents}
         
-        self.dones: np.ndarray[bool] = np.zeros(shape=self.agents.shape)
-        # I am omitting infos
+        self.dones: Dict(str, bool) = {str(i): False for i in self.agents}
+        # INFOS BECAUSE FUCKING KILL ME
+        self.infos = {name: {} for name in self.agents}
 
         self._reset_render()
 
         # TODO: need to recall agent select reset
         self.steps = 0 #Not sure what this does
-
+        self.agent_selection = self._agent_selector.reset()
         # TODO: current_actions??
         self.current_actions = [None] * self.n_agents
 
@@ -248,7 +315,8 @@ class FastSimpleEnv:
         
         self.world.step()
 
-        self.rewards[:] = self.scenario.global_reward(self.world)
+        for agent in self.agents:
+            self.rewards[agent] = self.scenario.global_reward(self.world)
         
 
     def _set_action(self, action: List[int], agent_index: int, action_space, time=None)->None:
@@ -266,7 +334,7 @@ class FastSimpleEnv:
         # We do not currently have a concept of acceleration
         sensitivity = 5.0
         self.world.agent_actions[agent_index] *= sensitivity
-        action = action[1:]
+        action = action[2:]
 
         # Our agents are never silent or continuous, and do not communicate
 
@@ -276,28 +344,29 @@ class FastSimpleEnv:
 
     def step(self, action):
         if self.dones[self.agent_selection]:
-            return self._was_done_step() # TODO: Implement this reference in AECEnv
+            return self._was_done_step(action) # TODO: Implement this reference in AECEnv
         
-        current_agent_idx = self.agent_selection
-        self.agent_selection = (current_agent_idx + 1) % self.n_agents
-        if self.agent_selection == 0:
+        curr_agent = self.agent_selection
+        current_idx = self._index_map[self.agent_selection]
+        next_idx = (current_idx + 1) % self.num_agents
+        self.agent_selection = self._agent_selector.next()
+        
+        self.current_actions[current_idx] = action
+
+        if next_idx == 0:
             self._execute_world_step()
             self.steps += 1
             if self.steps >= self.max_cycles:
-                self.dones[:] = True
+                for a in self.agents:
+                    self.dones[str(a)] = True
         else:
             self._clear_rewards()
         
-        #self._cumulative_rewards[cur_agent_idx] = 0
+        self._cumulative_rewards[curr_agent] = 0
         self._accumulate_rewards()
 
 
-
-    def _accumulate_rewards(self):
-        raise Exception(")_accumulative rewards not yet implemented")
-
-    def _clear_rewards(self):
-        raise Exception("_clear_rewards is not eyt implemented")
+ 
 
 
     def _reset_render(self):
@@ -393,14 +462,6 @@ class FastSimpleEnv:
 
 
 
-
-class raw_env(FastSimpleEnv):
-    def __init__(self, N=5, local_ratio=0.25, max_cycles=25, continuous_actions=True):
-        assert 0. <= local_ratio <= 1., "local_ratio is a proportion. Must be between 0 and 1."
-        scenario = FastScenario()
-        world = scenario.make_world(N)
-        super().__init__(scenario, world, max_cycles, continuous_actions, local_ratio)
-        self.metadata['name'] = "swarm_cover_v1"
 
 
 
