@@ -62,6 +62,7 @@ class CAMOCAgent:
         ld = 0
         for i in range(self._newton_iters):
             ggc = self._g_grad_constr(vhat) 
+            breakpoint()
             dld = -self.g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
             ld += dld
 

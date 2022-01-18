@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import numpy as np
 from jax import grad, jit, vmap
+import jax.numpy as jnp
 
 from stable_baselines3 import PPO
 
@@ -46,9 +47,6 @@ envschema = {
     },
 }
 
-def sqrt_ext(x):
-    return np.sqrt(x * np.sign(x)) * np.sign(x)
-
 def g_constr(obs_mfd):
     """
     Constraints on the observation manifold.
@@ -60,7 +58,10 @@ def g_constr(obs_mfd):
 
     # Load angle data for constraint
     angle_to_targets = obs_mfd[c: c + envschema["angles_to_targets"]["mfd_size"]]
-    angle_to_targets = angle_to_targets.reshape([2, int(angle_to_targets.shape[0] / 2)])
+    #angle_to_targets = angle_to_targets.reshape([2, int(angle_to_targets.shape[0] / 2)])
+    breakpoint()
+    angle_to_targets = jnp.reshape(angle_to_targets, [2, int(angle_to_targets.shape[0] / 2)])
+
 
     # Skip fields
     c = 0
@@ -69,7 +70,8 @@ def g_constr(obs_mfd):
 
     # Load speed data for constraint
     speed_to_agents = obs_mfd[c: c + envschema["speed_to_agents"]["mfd_size"]]
-    speed_to_agents = speed_to_agents.reshape([3, int(speed_to_agents.shape[0] / 3)])
+    #speed_to_agents = speed_to_agents.reshape([3, int(speed_to_agents.shape[0] / 3)])
+    speed_to_agents = jnp.reshape(speed_to_agents, [3, int(speed_to_agents.shape[0] / 3)])
 
     # Constraints
     angle_constr = np.linalg.norm(angle_to_targets, axis=0) - 1  # = 0
@@ -107,7 +109,8 @@ for tidx in range(20):
         env.step(act)
         # env.render()
         if not done:
-            cagent.add_samples(obs_native2mfd(obs, envschema), act)
+            obs_mfd = obs_native2mfd(obs, envschema)
+            cagent.add_samples(obs_mfd, act)
         else:
             break
 
