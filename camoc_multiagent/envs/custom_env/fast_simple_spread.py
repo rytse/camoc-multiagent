@@ -134,13 +134,27 @@ class FastWorld:
         WARNING: DOES NOT RETURN COMMUNICATION
         """
         
+        # Calculate distances and velocities
+        vec_to_targets = self.landmarks - self.agents[agent_index]  # targets
+        dist_to_targets = np.linalg.norm(vec_to_targets, axis=1)
+        vec_to_agents = self.agents - self.agents[agent_index]      # agents
+        dist_to_agents = np.linalg.norm(vec_to_agents, axis=1)
+        vel_to_agents = self.agent_velocities[agent_index] - self.agent_velocities
+        speed_to_agents = np.linalg.norm(vel_to_agents, axis=1)
+
+        # Calculate angles to landmarks
+        angles_to_targets = np.arctan2(vec_to_targets[:, 1], vec_to_targets[:, 0])
+
         # Agents / landmarks have no intrinsic order, so we sort by distance
-        dist_to_targets = np.sort(np.linalg.norm(self.agents[agent_index] - self.landmarks, axis=1))
-        dist_to_agents = np.sort(np.linalg.norm(self.agents[agent_index] - self.agents, axis=1))
-        speed_to_agents = np.sort(np.linalg.norm(self.agent_velocities[agent_index] - self.agent_velocities, axis=1))
+        targets_order = np.argsort(dist_to_targets)             # targets
+        dist_to_targets = dist_to_targets[targets_order]
+        angles_to_targets = angles_to_targets[targets_order]
+        agents_order = np.argsort(dist_to_agents)               # agents
+        dist_to_agents = dist_to_agents[agents_order]
+        speed_to_agents = speed_to_agents[agents_order]
 
         # Don't forget that we included the agent itself in the list of others
-        return np.concatenate([dist_to_targets[1:], dist_to_agents[1:], speed_to_agents[1:]])
+        return np.concatenate([dist_to_targets, angle_to_targets, dist_to_agents[1:], speed_to_agents[1:]])
 
 
     def reset(self, np_random) -> None:
