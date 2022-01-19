@@ -1,6 +1,6 @@
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3 import PPO
-from fast_simple_spread import FastSimpleEnv, FastScenario
+from rotator_coverage import FastSimpleEnv, FastScenario
 import supersuit as ss
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils.conversions import parallel_wrapper_fn

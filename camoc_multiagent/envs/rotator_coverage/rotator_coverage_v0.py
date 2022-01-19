@@ -1,14 +1,7 @@
-from stable_baselines3.ppo import MlpPolicy
-from stable_baselines3 import PPO
-from fast_simple_spread import FastSimpleEnv, FastScenario
+from envs.rotator_coverage.rotator_coverage import FastSimpleEnv, FastScenario
 import supersuit as ss
-from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
+from pettingzoo.mpe._mpe_utils.simple_env import make_env
 from pettingzoo.utils.conversions import parallel_wrapper_fn
-import numpy as np
-from pettingzoo.mpe.scenarios.simple_spread import Scenario as SimpleSpreadScenario
-from pettingzoo.mpe._mpe_utils.core import Agent, World, Landmark
-
-
 
 
 class raw_env(FastSimpleEnv):
@@ -19,7 +12,7 @@ class raw_env(FastSimpleEnv):
         super().__init__(scenario, world, max_cycles, continuous_actions, local_ratio)
         self.metadata['name'] = "swarm_cover_v1"
         self.continuous_actions = True
-    
+
 
 def preprocess_train(env):
 
@@ -47,24 +40,3 @@ parallel_env = parallel_wrapper_fn(env)
 
 env_train = preprocess_train(parallel_env)
 env_eval = preprocess_eval(env)
-
-# Just for testing TODO remove
-if __name__ == '__main__':
-    env = env_train()
-
-    model = PPO(MlpPolicy, env, verbose=3, gamma=0.95, n_steps=256,
-                ent_coef=0.0905168, learning_rate=0.00062211, vf_coef=0.042202,
-                max_grad_norm=0.9, gae_lambda=0.99, n_epochs=5, clip_range=0.3,
-                batch_size=256)
-
-    model.learn(total_timesteps=50_000)
-    #model.save("./policies/cenv_ppo_policy")
-    #model = PPO.load("./policies/cenv_ppo_policy")
-    env = env_eval()
-    env.reset()
-    for agent in env.agent_iter():
-        obs, reward, done, info = env.last()
-        act = model.predict(obs, deterministic=True)[0] if not done else None
-        env.step(act)
-        env.render()
-

@@ -1,20 +1,15 @@
-from collections import OrderedDict
-
 import numpy as np
-from jax import grad, jit, vmap
 import jax.numpy as jnp
 
 from stable_baselines3 import PPO
 
 from camoc_agent.camoc_agent import CAMOCAgent
 from camoc_agent.manifold_utils import *
-from camoc_agent.camoc_agent import CAMOCAgent
-#from envs.swarmcover import swarm_cover_v1
-import envs.custom_env.PREPROC as fast_simple_env_v0
+from envs.rotator_coverage import rotator_coverage_v0
 
 
 # Load the environment (to pull data from!)
-env = fast_simple_env_v0.env_eval()
+env = rotator_coverage_v0.env_eval()
 
 world = env.env.env.world
 NUM_AGENTS = world.n_agents
