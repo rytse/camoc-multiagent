@@ -9,9 +9,9 @@ def train_ppo(env_train, env_eval, name, total_timesteps, **kwargs):
     env_eval.reset()
     savebest_cb = EvalCallback(
         eval_env=env_eval,
-        best_model_save_path=f'./policies/{name}_best_model.zip',
+        best_model_save_path=f'./policies/{name}_ppo_policy_best',
         log_path=f'./logs/{name}_eval_log.txt',
-        eval_freq=500,
+        eval_freq=10_000,
         deterministic=True,
         render=False
     )
@@ -22,10 +22,7 @@ def train_ppo(env_train, env_eval, name, total_timesteps, **kwargs):
     except Exception:
         model = PPO(MlpPolicy,
                     env_train,
-                    verbose=3,
-                    n_steps=256,
-                    batch_size=256,
-                    n_epochs=5,
+                    verbose=0,
                     **kwargs
                 )
 
@@ -37,7 +34,8 @@ def train_ppo(env_train, env_eval, name, total_timesteps, **kwargs):
 
 
 def eval_ppo(env_eval, name):
-    model = PPO.load("./policies/swarmcover_ppo_policy")
+    model = PPO.load(f"./policies/{name}_ppo_policy")
+    model = PPO.load(f"./policies/{name}_ppo_policy")
 
     env_eval.reset()
     for agent in env_eval.agent_iter():

@@ -1,0 +1,1 @@
+{"batch_size": 16, "n_steps": 32, "n_epochs": 5, "gamma": 0.98, "learning_rate": 0.05162244758886057, "ent_coef": 1.2442310633298815e-07, "clip_range": 0.2, "gae_lambda": 0.92, "max_grad_norm": 5, "vf_coef": 0.21931181367700803, "log_std_init": -0.8644175059313546, "sde_sample_freq": -1}

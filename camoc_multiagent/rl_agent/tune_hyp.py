@@ -32,6 +32,10 @@ def study(env_train, env_eval, name, train_timesteps, optimizer_timesteps):
 
     # Optuna objective function that has local access to env and name 
     def objective(trial):
+        batch_size = trial.suggest_categorical("batch_size", [8, 16, 32, 64, 128, 256, 512])
+        n_steps = trial.suggest_categorical("n_steps", [8, 16, 32, 64, 128, 256, 512, 1024, 2048])
+        n_epochs = trial.suggest_categorical("n_epochs", [1, 5, 10, 20])
+
         gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
         learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1)
         lr_schedule = "constant"
@@ -58,6 +62,9 @@ def study(env_train, env_eval, name, train_timesteps, optimizer_timesteps):
 
         # Set up the kwargs
         ppo_hyperparams = {
+            "n_steps": n_steps,
+            "batch_size": batch_size,
+            "n_epochs": n_epochs,
             "gamma": gamma,
             "learning_rate": learning_rate,
             "ent_coef": ent_coef,

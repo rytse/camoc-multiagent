@@ -9,13 +9,6 @@ from gym import spaces
 from pettingzoo.utils.agent_selector import agent_selector
 
 
-
-
-
-
-
-
-
 class FastWorld:
     def __init__(self, n_agents: np.int, n_entities: np.int, entity_sizes: np.ndarray):
         self.n_agents = n_agents
@@ -222,15 +215,6 @@ class FastScenario:
         # dist_penalty + variance * (1/"dist_penalty" * k)
         return -dist_penalty / (coverage_reward + 1e-6)  #+ collision_penalty
         
-        #headings = np.array([np.cos(world.ctrl_thetas), np.sin(world.ctrl_thetas)]).T 
-        #headpos = world.positions + headings * (world.entity_sizes * world.movables)[:, None]
-        #dist_pe
-
-        
-    
-
-
-    
 
     def reset_world(self, world, np_random):
         world.reset(np_random)
@@ -359,14 +343,10 @@ class FastSimpleEnv(AECEnv):
         # TODO: current_actions??
         self.current_actions = [None] * self.n_agents
 
-#    def agent_iter():
-#        yield
 
     def _execute_world_step(self):
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
-            #print(action)
-            #breakpoint()
             self.world.ctrl_thetas[i] += action[0]
             self.world.ctrl_speeds[i] += action[1]
 
