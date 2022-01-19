@@ -1,6 +1,6 @@
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3 import PPO
-from envs.custom_env.fast_simple_spread import FastSimpleEnv, FastScenario
+from fast_simple_spread import FastSimpleEnv, FastScenario
 import supersuit as ss
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils.conversions import parallel_wrapper_fn
@@ -12,7 +12,7 @@ from pettingzoo.mpe._mpe_utils.core import Agent, World, Landmark
 
 
 class raw_env(FastSimpleEnv):
-    def __init__(self, N=5, local_ratio=0.25, max_cycles=25, continuous_actions=True):
+    def __init__(self, N=5, local_ratio=0.25, max_cycles=100, continuous_actions=True):
         assert 0. <= local_ratio <= 1., "local_ratio is a proportion. Must be between 0 and 1."
         scenario = FastScenario()
         world = scenario.make_world(N)
@@ -57,5 +57,14 @@ if __name__ == '__main__':
                 max_grad_norm=0.9, gae_lambda=0.99, n_epochs=5, clip_range=0.3,
                 batch_size=256)
 
-    model.learn(total_timesteps=20000)
-    model.save("./policies/cenv_ppo_policy")
+    model.learn(total_timesteps=50_000)
+    #model.save("./policies/cenv_ppo_policy")
+    #model = PPO.load("./policies/cenv_ppo_policy")
+    env = env_eval()
+    env.reset()
+    for agent in env.agent_iter():
+        obs, reward, done, info = env.last()
+        act = model.predict(obs, deterministic=True)[0] if not done else None
+        env.step(act)
+        env.render()
+

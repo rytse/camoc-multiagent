@@ -24,12 +24,12 @@ class FastWorld:
         self.entity_sizes = entity_sizes
 
         # World parameters
-        self.dt = 0.1
-        self.damping = 0.25
-        self.maxspeed = 1.0
+        self.dt = 0.5
+        self.damping = 0.015
+        self.maxspeed = 20.0
 
         self.dim_p = 2 # (x,y)
-        self.contact_force = np.float32(1e2)
+        self.contact_force = np.float32(1e3)
         self.contact_margin = np.float32(1e-3)
 
 
@@ -38,45 +38,58 @@ class FastWorld:
         self.velocities: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
 
         self.ctrl_thetas: np.ndarray = np.zeros(n_entities)
-        self.ctrl_speeds: np.ndarray = np.zeros(n_entities)
+        self.ctrl_speeds: np.ndarray = np.zeros(n_entities)#[:, None]
 
         # Agent can do an action, action space for each agent is (X, Y)
         self.agent_actions: np.ndarray[np.ndarray] = np.zeros(shape=(n_entities, self.dim_p))
 
         # Only agents are movable
-        self.movables = np.zeros(n_entities)
+        self.movables = np.zeros(n_entities, dtype=bool)
+        #self.movables[:] = False
         self.movables[:n_agents] = 1
+        self.targets = self.movables[:]
+        #breakpoint()
+        self.targets = np.ones(n_entities,dtype=bool) #[:, None]
+        self.targets[:n_agents] = 0
 
         self.entity_sizes: np.ndarray = entity_sizes
 
         self.sizemat = self.entity_sizes[..., None] * self.entity_sizes[None, ...]
-        
-        
+        #self.sizemat *= 2 # this is a guess... radius vs complete circle
+
+        self.diag_indices = np.diag_indices(self.positions.shape[0])
         
 
     def step(self) -> None:
         # heading.shape = 2,6,2
-        heading: np.ndarray = np.array([np.cos(self.ctrl_thetas), np.sin(self.ctrl_thetas)]).T
+        heading: np.ndarray = np.vstack([np.cos(self.ctrl_thetas), np.sin(self.ctrl_thetas)])
+        heading = heading.T
         #print(f"heading: {heading.shape}, velocity: {self.velocities.shape} ")
         #print(f"ctrl_speed: {self.ctrl_speeds.shape} movables: {self.movables.shape}")
-        self.velocities = (self.ctrl_speeds * self.movables)[:, None] * heading
-        assert self.velocities.shape == (6,2), "self.velocities shape mutated"
+        self.velocities = self.maxspeed * (self.ctrl_speeds * self.movables)[:, None] * heading
+        
+        #self.velocities = self.ctrl_speeds * heading * self.targets
+        #assert self.velocities.shape == (6,2), "self.velocities shape mutated"
 
         # 2 detect collisons
         dist_matrix = distance_matrix(self.positions, self.positions)
-        collisions: np.ndarray = dist_matrix < self.sizemat
-        
+        self.collisions: np.ndarray = dist_matrix < self.sizemat
+        self.collisions[self.diag_indices] = False
+        #self.collisions[self.low_triangular_indices_positions] = False
         # prolly a smarter way to check
-        if np.any(collisions):
+        if np.any(self.collisions):
+            #print(f"Collisons detected: {collisions}")
             # 3 calculate collison forces  
             penetrations = np.logaddexp(0, -(dist_matrix - self.sizemat) / self.contact_margin) \
-                                * self.contact_margin * collisions
+                                * self.contact_margin * self.collisions
             
-            forces_s: np.float32 = self.contact_force * penetrations * collisions
+
+            forces_s: np.float32 = self.contact_force * penetrations * self.collisions
             diffmat: np.ndarray = self.positions[:, None, :] - self.positions  # skew symetric
             
             forces_v = diffmat * forces_s[..., None]
             
+            #breakpoint()
 
             # 4 integrate collsion forces
             s = np.sum(forces_v, axis=0)
@@ -84,14 +97,24 @@ class FastWorld:
             #print(f"self.velocities.shape {self.velocities.shape}")
             #print(f"self.dt {self.dt}")
             self.velocities += np.sum(forces_v, axis=0) * self.dt
-
+            self.velocities[self.n_agents:, :] = 0
+            #assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move" 
         # 5 integrate damping
         self.velocities -= self.velocities * (1 - self.damping)
-
+        #print(self.velocities)
+        assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move" 
         # Integrate position
         self.positions += self.velocities * self.dt
 
   
+    
+    def dumb_collision_fix(self):
+        positions_copy = self.positions[:]
+        square_sizes = np.square(self.entity_sizes)
+        for idx, pos in enumerate(self.positions):
+            tmp = np.square(positions_copy - pos)
+            indices = np.where(tmp < square_sizes)
+
 
     @property
     def landmarks(self) -> np.ndarray:
@@ -139,16 +162,20 @@ class FastWorld:
         """
         Resets the world
         """
-        self.positions =  np_random.uniform(-1, +1, size=(self.positions.shape))
+        self.positions =  np_random.uniform(-3, +3, size=(self.positions.shape))
         self.velocities[:] = 0
         self.agent_actions[:] = 0
+
+        self.ctrl_thetas[:] = 0
+        self.ctrl_speeds[:] = 0
+
         
         
 # Could inherit base Scenario
 class FastScenario:
-    def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1.5, N_THETA=10):
+    def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1., N_THETA=10):
         entity_sizes: np.ndarray = np.array([AGENT_SIZE for _ in range(N)] + [LANDMARK_SIZE])
-
+        print(entity_sizes)
         world = FastWorld(N, N+1, entity_sizes)
         # set any world properties first
         #world.collaborative = True
@@ -169,15 +196,17 @@ class FastScenario:
         '''
         Calculate global reward for the world in its current state.
         '''
-
+        
         # Get distance penalty
         headings = np.array([np.cos(world.ctrl_thetas), np.sin(world.ctrl_thetas)]).T 
-        headpos = world.positions + headings * (world.entity_sizes * world.movables)[:, None]
+        headpos = world.positions + headings * (world.entity_sizes * ~world.targets)[:, None]
 
         dists = distance_matrix(headpos, headpos)
-        mask = world.movables[:, None] * world.movables[None, :]
+        # indices where (agent, landmark) = True
+        # (agent, agent) (landmark, landmark) = False
+        mask = ~np.logical_xor(~world.targets[:, None], world.targets[None,:])
         relevant_dists = dists * mask
-        dist_penalty = np.sum(relevant_dists[:])
+        dist_penalty = np.square(np.sum(relevant_dists))
 
         # Get coverage reward
         diffmat = world.positions[:, None, :] - world.positions
@@ -186,7 +215,21 @@ class FastScenario:
         #print(type(-dist_penalty / (coverage_reward + 1e-6)))
         #sys.quit()
         # Combine the two objectives
-        return -dist_penalty / (coverage_reward + 1e-6)
+        # Heavy penalize collisons
+        #collision_penalty = np.square(np.sum(world.collisions))
+        #breakpoint()
+        #sum_vel = np.sum(world.velocities) * 1_000_000
+        # dist_penalty + variance * (1/"dist_penalty" * k)
+        return -dist_penalty / (coverage_reward + 1e-6)  #+ collision_penalty
+        
+        #headings = np.array([np.cos(world.ctrl_thetas), np.sin(world.ctrl_thetas)]).T 
+        #headpos = world.positions + headings * (world.entity_sizes * world.movables)[:, None]
+        #dist_pe
+
+        
+    
+
+
     
 
     def reset_world(self, world, np_random):
@@ -322,9 +365,10 @@ class FastSimpleEnv(AECEnv):
     def _execute_world_step(self):
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
-
-            self.world.ctrl_thetas[i] = action[0]
-            self.world.ctrl_speeds[i] = action[1]
+            #print(action)
+            #breakpoint()
+            self.world.ctrl_thetas[i] += action[0]
+            self.world.ctrl_speeds[i] += action[1]
 
         self.world.step()
 
@@ -362,8 +406,10 @@ class FastSimpleEnv(AECEnv):
     def _reset_render(self):
         self.render_geoms = None
         self.render_geoms_xform = None
+    
+
     def render(self, mode='human'):
-        from . import rendering
+        from pettingzoo.mpe._mpe_utils import rendering
 
         if self.viewer is None:
             self.viewer = rendering.Viewer(700, 700)
@@ -375,6 +421,19 @@ class FastSimpleEnv(AECEnv):
             # from multiagent._mpe_utils import rendering
             self.render_geoms = []
             self.render_geoms_xform = []
+            for idx, (entity, entity_size) in enumerate(zip(self.world.positions, self.world.entity_sizes)):
+                geom = rendering.make_circle(entity_size)
+                xform = rendering.Transform()
+                if idx <= self.world.n_agents:
+                    geom.set_color(0.100,.100,.100, alpha=0.5)
+                else:
+                    geom.set_color(.20,.6,.10)
+                geom.add_attr(xform)
+                self.render_geoms.append(geom)
+                self.render_geoms_xform.append(xform)
+            
+
+            '''
             for entity in self.world.entities:
                 geom = rendering.make_circle(entity.size)
                 xform = rendering.Transform()
@@ -385,6 +444,8 @@ class FastSimpleEnv(AECEnv):
                 geom.add_attr(xform)
                 self.render_geoms.append(geom)
                 self.render_geoms_xform.append(xform)
+            '''
+            
 
             # add geoms to viewer
             self.viewer.geoms = []
@@ -393,12 +454,15 @@ class FastSimpleEnv(AECEnv):
 
             self.viewer.text_lines = []
             idx = 0
+            '''
             for agent in self.world.agents:
                 if not agent.silent:
                     tline = rendering.TextLine(self.viewer.window, idx)
                     self.viewer.text_lines.append(tline)
                     idx += 1
-
+            '''
+            
+        '''
         alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         for idx, other in enumerate(self.world.agents):
             if other.silent:
@@ -413,14 +477,17 @@ class FastSimpleEnv(AECEnv):
             message = (other.name + ' sends ' + word + '   ')
 
             self.viewer.text_lines[idx].set_text(message)
+        '''
+        
 
         # update bounds to center around agent
-        all_poses = [entity.pos for entity in self.world.entities]
+        all_poses = [pos for pos in self.world.positions]
         cam_range = np.max(np.abs(np.array(all_poses))) + 1
         self.viewer.set_max_size(cam_range)
         # update geometry positions
-        for e, entity in enumerate(self.world.entities):
-            self.render_geoms_xform[e].set_translation(*entity.pos)
+        #print(self.world.positions.shape)
+        for e, entity in enumerate(self.world.positions):
+            self.render_geoms_xform[e].set_translation(*entity)
         # render to display or array
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
     
