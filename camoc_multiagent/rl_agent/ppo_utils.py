@@ -7,6 +7,7 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 def train_ppo(env_train, env_eval, name, total_timesteps, **kwargs):
     env_eval.reset()
+
     savebest_cb = EvalCallback(
         eval_env=env_eval,
         best_model_save_path=f'./policies/{name}_ppo_policy_best',

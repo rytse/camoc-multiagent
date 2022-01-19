@@ -18,7 +18,8 @@ class FastWorld:
 
         # World parameters
         self.dt = 0.5
-        self.damping = 0.015
+        # self.damping = 0.015
+        self.damping = 0.0
         self.maxspeed = 20.0
 
         self.dim_p = 2 # (x,y)
@@ -64,38 +65,41 @@ class FastWorld:
         #self.velocities = self.ctrl_speeds * heading * self.targets
         #assert self.velocities.shape == (6,2), "self.velocities shape mutated"
 
+        #breakpoint()
+
         # 2 detect collisons
         dist_matrix = distance_matrix(self.positions, self.positions)
         self.collisions: np.ndarray = dist_matrix < self.sizemat
         self.collisions[self.diag_indices] = False
         #self.collisions[self.low_triangular_indices_positions] = False
         # prolly a smarter way to check
-        if np.any(self.collisions):
-            #print(f"Collisons detected: {collisions}")
-            # 3 calculate collison forces  
-            penetrations = np.logaddexp(0, -(dist_matrix - self.sizemat) / self.contact_margin) \
-                                * self.contact_margin * self.collisions
-            
+#        if np.any(self.collisions):
+#            #print(f"Collisons detected: {collisions}")
+#            # 3 calculate collison forces  
+#            penetrations = np.logaddexp(0, -(dist_matrix - self.sizemat) / self.contact_margin) \
+#                                * self.contact_margin * self.collisions
+#            
+#
+#            forces_s: np.float32 = self.contact_force * penetrations * self.collisions
+#            diffmat: np.ndarray = self.positions[:, None, :] - self.positions  # skew symetric
+#            
+#            forces_v = diffmat * forces_s[..., None]
+#            
+#            #breakpoint()
+#
+#            # 4 integrate collsion forces
+#            s = np.sum(forces_v, axis=0)
+#            #print(f"np.sum(forces_v, axis=0).shape {s.T.shape}")
+#            #print(f"self.velocities.shape {self.velocities.shape}")
+#            #print(f"self.dt {self.dt}")
+#            self.velocities += np.sum(forces_v, axis=0) * self.dt
+#            self.velocities[self.n_agents:, :] = 0
+#            #assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move" 
+        #breakpoint()
 
-            forces_s: np.float32 = self.contact_force * penetrations * self.collisions
-            diffmat: np.ndarray = self.positions[:, None, :] - self.positions  # skew symetric
-            
-            forces_v = diffmat * forces_s[..., None]
-            
-            #breakpoint()
-
-            # 4 integrate collsion forces
-            s = np.sum(forces_v, axis=0)
-            #print(f"np.sum(forces_v, axis=0).shape {s.T.shape}")
-            #print(f"self.velocities.shape {self.velocities.shape}")
-            #print(f"self.dt {self.dt}")
-            self.velocities += np.sum(forces_v, axis=0) * self.dt
-            self.velocities[self.n_agents:, :] = 0
-            #assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move" 
         # 5 integrate damping
-        self.velocities -= self.velocities * (1 - self.damping)
-        #print(self.velocities)
-        assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move" 
+        #self.velocities -= self.velocities * self.damping
+
         # Integrate position
         self.positions += self.velocities * self.dt
 
@@ -194,7 +198,8 @@ class FastScenario:
         headings = np.array([np.cos(world.ctrl_thetas), np.sin(world.ctrl_thetas)]).T 
         headpos = world.positions + headings * (world.entity_sizes * ~world.targets)[:, None]
 
-        dists = distance_matrix(headpos, headpos)
+        # dists = distance_matrix(headpos, headpos)
+        dists = distance_matrix(world.positions, world.positions)
         # indices where (agent, landmark) = True
         # (agent, agent) (landmark, landmark) = False
         mask = ~np.logical_xor(~world.targets[:, None], world.targets[None,:])
@@ -213,7 +218,8 @@ class FastScenario:
         #breakpoint()
         #sum_vel = np.sum(world.velocities) * 1_000_000
         # dist_penalty + variance * (1/"dist_penalty" * k)
-        return -dist_penalty / (coverage_reward + 1e-6)  #+ collision_penalty
+        # return -dist_penalty / (coverage_reward + 1e-6)  #+ collision_penalty
+        return -dist_penalty + np.linalg.norm(world.velocities) * 100
         
 
     def reset_world(self, world, np_random):
@@ -347,24 +353,25 @@ class FastSimpleEnv(AECEnv):
     def _execute_world_step(self):
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
-            self.world.ctrl_thetas[i] += action[0]
-            self.world.ctrl_speeds[i] += action[1]
+            self.world.ctrl_thetas[i] = action[0]
+            self.world.ctrl_speeds[i] = action[1]
 
         self.world.step()
 
-        for agent in self.agents:
-            self.rewards[agent] = self.scenario.global_reward(self.world)
-
+        for a, agent in enumerate(self.agents):
+            self.rewards[agent] = self.scenario.global_reward(self.world) # - \
+#                                    np.linalg.norm(self.world.positions[a] -
+#                                    self.world.positions[-1])
 
     def step(self, action):
         if self.dones[self.agent_selection]:
             return self._was_done_step(action) # TODO: Implement this reference in AECEnv
-        
+
         curr_agent = self.agent_selection
         current_idx = self._index_map[self.agent_selection]
         next_idx = (current_idx + 1) % self.num_agents
         self.agent_selection = self._agent_selector.next()
-        
+
         self.current_actions[current_idx] = action
 
         if next_idx == 0:
@@ -375,18 +382,15 @@ class FastSimpleEnv(AECEnv):
                     self.dones[str(a)] = True
         else:
             self._clear_rewards()
-        
+
         self._cumulative_rewards[curr_agent] = 0
         self._accumulate_rewards()
-
-
- 
 
 
     def _reset_render(self):
         self.render_geoms = None
         self.render_geoms_xform = None
-    
+
 
     def render(self, mode='human'):
         from pettingzoo.mpe._mpe_utils import rendering
@@ -476,75 +480,4 @@ class FastSimpleEnv(AECEnv):
             self.viewer.close()
             self.viewer = None
         self._reset_render()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-'''
-class FastWorld:
-    def __init__(self, n_agents, n_entities, AGENT_SIZE, LANDMARK_SIZE):
-        #self.agents_x: np.ndarray = np.zeros(n_agents)
-        #self.agents_y: np.ndarray = np.zeros(n_agents)
-        self.agent_pos: np.ndarray = np.zeros(shape=(n_agents, 2))
-        self.agent_color: np.ndarray = np.array([0.35, 0.35, 0.35]) # all agents same color
-        self.agent_size = AGENT_SIZE
-
-        self.entity_positions
-        self.agent_actions = np.zeros(shape=(n_agents, 2))
-
-        self.landmark_pos: np.ndarray = np.zeros(2)
-        self.landmark_color: np.ndarray = np.array([0.25, 0.25, 0.25])
-
-        self.dt: np.float32 = np.float32(0.1)
-        self.damping: np.float32 = np.float32(0.25)
-        self.contact_force: np.float32 = np.float32(1e2)
-        self.contact_margin: np.float32 = np.float32(1e-3)
-        
-        self.collide_distance = self.agent_size * 2
-
-
-        # Shit I don't know why but exists and I'l keep for now
-        self.dim_c = 2
-
-
-    def step(self):
-        # n_agents long
-        p_force: np.ndarray = np.zeros(shape=(self.agent_pos.shape[0],2))
-        # assume all agents have actions
-        p_force += self.agent_actions # they have a concept of noise, we don't
-        # I believe ryan can do this
-
-    def apply_environment_force(self, p_force: np.ndarray) -> None:
-        pass
-
-    
-
-'''
-
-    
- 
 

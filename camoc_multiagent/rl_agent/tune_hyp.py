@@ -83,7 +83,9 @@ def study(env_train, env_eval, name, train_timesteps, optimizer_timesteps):
 
         return model._logger.name_to_value['train/loss']
 
-    study = optuna.create_study()
+    study_name = "hyptune-study"  # Unique identifier of the study.
+    storage_name = "sqlite:///{}.db".format(study_name)
+    study = optuna.create_study(study_name=study_name, storage=storage_name, load_if_exists=True)
     study.optimize(objective, n_trials=optimizer_timesteps)
 
     return study.best_params
