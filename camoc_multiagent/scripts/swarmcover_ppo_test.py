@@ -6,7 +6,13 @@ import supersuit as ss
 env = swarm_cover_v1.train_env()
 
 
-model = PPO(MlpPolicy, env, verbose=3, n_steps=256, batch_size=256, n_epochs=5,
+model = PPO(
+    MlpPolicy,
+    env,
+    verbose=3,
+    n_steps=256,
+    batch_size=256,
+    n_epochs=5,
     gamma=0.9,
     ent_coef=0.0030735679138708203,
     learning_rate=0.032934272464911644,
@@ -15,10 +21,7 @@ model = PPO(MlpPolicy, env, verbose=3, n_steps=256, batch_size=256, n_epochs=5,
     gae_lambda=0.92,
     clip_range=0.4,
     sde_sample_freq=-1,
-    policy_kwargs = {
-        'log_std_init': -1.60025077202246,
-        'ortho_init': True
-    }
+    policy_kwargs={"log_std_init": -1.60025077202246, "ortho_init": True},
 )
 
 model.learn(total_timesteps=20000)

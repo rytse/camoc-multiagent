@@ -12,8 +12,8 @@ TRAIN_STEPS = int(1e4)
 OPT_STEPS = 4
 
 # ~15 hr
-#TRAIN_STEPS = int(1e7)
-#OPT_STEPS = 50
+# TRAIN_STEPS = int(1e7)
+# OPT_STEPS = 50
 
 os.setpgrp()
 
