@@ -1,15 +1,18 @@
-from envs.rotator_coverage.rotator_coverage import FastSimpleEnv, FastScenario
+from envs.rotator_coverage.rotator_coverage import (
+    RotatorCoverageEnv,
+    RotatorCoverageScenario,
+)
 import supersuit as ss
 from pettingzoo.mpe._mpe_utils.simple_env import make_env
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 
 
-class raw_env(FastSimpleEnv):
+class raw_env(RotatorCoverageEnv):
     def __init__(self, N=5, local_ratio=0.25, max_cycles=100, continuous_actions=True):
         assert (
             0.0 <= local_ratio <= 1.0
         ), "local_ratio is a proportion. Must be between 0 and 1."
-        scenario = FastScenario()
+        scenario = RotatorCoverageScenario()
         world = scenario.make_world(N)
         super().__init__(scenario, world, max_cycles, continuous_actions, local_ratio)
         self.metadata["name"] = "swarm_cover_v1"

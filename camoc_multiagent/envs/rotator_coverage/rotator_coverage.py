@@ -9,7 +9,7 @@ from gym import spaces
 from pettingzoo.utils.agent_selector import agent_selector
 
 
-class FastWorld:
+class RotatorCoverageWorld:
     def __init__(self, n_agents: np.int, n_entities: np.int, entity_sizes: np.ndarray):
         self.n_agents = n_agents
         self.n_landmarks = n_entities - n_agents
@@ -174,13 +174,13 @@ class FastWorld:
 
 
 # Could inherit base Scenario
-class FastScenario:
+class RotatorCoverageScenario:
     def make_world(self, N=3, AGENT_SIZE=0.15, LANDMARK_SIZE=1.0, N_THETA=10):
         entity_sizes: np.ndarray = np.array(
             [AGENT_SIZE for _ in range(N)] + [LANDMARK_SIZE]
         )
         print(entity_sizes)
-        world = FastWorld(N, N + 1, entity_sizes)
+        world = RotatorCoverageWorld(N, N + 1, entity_sizes)
         # set any world properties first
         # world.collaborative = True
 
@@ -233,15 +233,15 @@ class FastScenario:
     def reset_world(self, world, np_random):
         world.reset(np_random)
 
-    def observation(self, agent_index: int, world: FastWorld) -> np.ndarray:
+    def observation(self, agent_index: int, world: RotatorCoverageWorld) -> np.ndarray:
         return world.observation(agent_index)
 
 
-class FastSimpleEnv(AECEnv):
+class RotatorCoverageEnv(AECEnv):
     def __init__(
         self,
-        scenario: FastScenario,
-        world: FastWorld,
+        scenario: RotatorCoverageScenario,
+        world: RotatorCoverageWorld,
         max_cycles: int,
         continuous_actions: bool = True,
         local_ratio: bool = None,
