@@ -55,44 +55,36 @@ class RotatorCoverageWorld:
             [np.cos(self.ctrl_thetas), np.sin(self.ctrl_thetas)]
         )
         heading = heading.T
-        # print(f"heading: {heading.shape}, velocity: {self.velocities.shape} ")
-        # print(f"ctrl_speed: {self.ctrl_speeds.shape} movables: {self.movables.shape}")
         self.velocities = (
             self.maxspeed * (self.ctrl_speeds * self.movables)[:, None] * heading
         )
 
-        # self.velocities = self.ctrl_speeds * heading * self.targets
-        # assert self.velocities.shape == (6,2), "self.velocities shape mutated"
-
-        # breakpoint()
-
-        # 2 detect collisons
+        # Detect collisons
         dist_matrix = distance_matrix(self.positions, self.positions)
         self.collisions: np.ndarray = dist_matrix < self.sizemat
         self.collisions[self.diag_indices] = False
         # self.collisions[self.low_triangular_indices_positions] = False
         # prolly a smarter way to check
         if np.any(self.collisions):
-            # print(f"Collisons detected: {collisions}")
-            # 3 calculate collison forces
-            penetrations = np.logaddexp(0, -(dist_matrix - self.sizemat) / self.contact_margin) \
-                                * self.contact_margin * self.collisions
-
+            # Calculate collison forces
+            penetrations = (
+                np.logaddexp(0, -(dist_matrix - self.sizemat) / self.contact_margin)
+                * self.contact_margin
+                * self.collisions
+            )
 
             forces_s: np.float32 = self.contact_force * penetrations * self.collisions
-            diffmat: np.ndarray = self.positions[:, None, :] - self.positions  # skew symetric
+            diffmat: np.ndarray = (
+                self.positions[:, None, :] - self.positions
+            )  # skew symetric
 
             forces_v = diffmat * forces_s[..., None]
 
             # 4 integrate collsion forces
             self.velocities -= np.sum(forces_v, axis=0) * self.dt
-            breakpoint()
-            # self.velocities[self.n_agents:, :] = 0
-            # assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move"
-        # breakpoint()
 
         # 5 integrate damping
-        # self.velocities -= self.velocities * self.damping
+        self.velocities -= self.velocities * self.damping
 
         # Integrate position
         self.positions += self.velocities * self.dt
@@ -171,7 +163,8 @@ class RotatorCoverageScenario:
         )
         print(entity_sizes)
         world = RotatorCoverageWorld(N, N + 1, entity_sizes)
-        # set any world properties first
+
+        # Set world properties first
         # world.collaborative = True
 
         # add agents
