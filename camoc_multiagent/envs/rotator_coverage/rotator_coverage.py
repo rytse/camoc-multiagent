@@ -424,7 +424,7 @@ class RotatorCoverageEnv(AECEnv):
             ):
                 geom = rendering.make_circle(entity_size)
                 xform = rendering.Transform()
-                if idx <= self.world.n_agents:
+                if idx < self.world.n_agents:
                     geom.set_color(0.100, 0.100, 0.100, alpha=0.5)
                 else:
                     geom.set_color(0.20, 0.6, 0.10)
