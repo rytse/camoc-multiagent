@@ -19,7 +19,7 @@ class RotatorCoverageWorld:
         # World parameters
         self.dt = 0.1
         self.damping = 1.5e-2
-        self.maxspeed = 0.5
+        self.maxspeed = 2
 
         self.dim_p = 2  # (x,y)
         self.contact_force = np.float32(5e2)
@@ -202,16 +202,9 @@ class RotatorCoverageScenario:
         diffmat = world.positions[:, None, :] - world.positions
         rel_thetas = np.arctan2(diffmat[:, :, 1], diffmat[:, :, 0])
         coverage_reward = np.var(rel_thetas)
-        # print(type(-dist_penalty / (coverage_reward + 1e-6)))
-        # sys.quit()
+
         # Combine the two objectives
-        # Heavy penalize collisons
-        # collision_penalty = np.square(np.sum(world.collisions))
-        # breakpoint()
-        # sum_vel = np.sum(world.velocities) * 1_000_000
-        # dist_penalty + variance * (1/"dist_penalty" * k)
-        # return -dist_penalty / (coverage_reward + 1e-6)  #+ collision_penalty
-        return -dist_penalty + np.linalg.norm(world.velocities) * 100
+        return 10 * coverage_reward - dist_penalty
 
     def reset_world(self, world, np_random):
         world.reset(np_random)
@@ -351,16 +344,11 @@ class RotatorCoverageEnv(AECEnv):
             action = self.current_actions[i]
             self.world.ctrl_thetas[i] = action[0]
             self.world.ctrl_speeds[i] = action[1]
-            # self.world.ctrl_thetas[i] += 1e-1
-            # self.world.ctrl_speeds[i] = 1
 
         self.world.step()
 
         for a, agent in enumerate(self.agents):
-            self.rewards[agent] = self.scenario.global_reward(self.world)  # - \
-
-    #                                    np.linalg.norm(self.world.positions[a] -
-    #                                    self.world.positions[-1])
+            self.rewards[agent] = self.scenario.global_reward(self.world)
 
     def step(self, action):
         if self.dones[self.agent_selection]:

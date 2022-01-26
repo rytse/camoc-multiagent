@@ -7,16 +7,16 @@ model = PPO(
     MlpPolicy,
     env,
     verbose=3,
+    n_steps=2048,
+    n_epochs=10,
+    batch_size=64,
     gamma=0.95,
-    n_steps=256,
     ent_coef=0.0905168,
-    learning_rate=0.00062211,
+    learning_rate=0.00062211 * 10,
     vf_coef=0.042202,
     max_grad_norm=0.9,
     gae_lambda=0.99,
-    n_epochs=5,
     clip_range=0.3,
-    batch_size=256,
 )
 
 model.learn(total_timesteps=100_000)

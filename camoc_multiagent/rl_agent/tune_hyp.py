@@ -33,10 +33,14 @@ def study(env_train, env_eval, name, train_timesteps, optimizer_timesteps):
     # Optuna objective function that has local access to env and name
     def objective(trial):
         batch_size = trial.suggest_categorical(
-            "batch_size", [8, 16, 32, 64, 128, 256, 512]
+            # "batch_size", [8, 16, 32, 64, 128, 256, 512]
+            "batch_size",
+            [8, 16, 32, 64],
         )
         n_steps = trial.suggest_categorical(
-            "n_steps", [8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+            # "n_steps", [8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+            "n_steps",
+            [128, 256, 512, 1024, 2048],
         )
         n_epochs = trial.suggest_categorical("n_epochs", [1, 5, 10, 20])
 
