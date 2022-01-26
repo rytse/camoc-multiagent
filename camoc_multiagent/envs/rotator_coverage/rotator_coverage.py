@@ -17,14 +17,13 @@ class RotatorCoverageWorld:
         self.entity_sizes = entity_sizes
 
         # World parameters
-        self.dt = 0.5
-        # self.damping = 0.015
-        self.damping = 0.0
-        self.maxspeed = 20.0
+        self.dt = 0.1
+        self.damping = 1.5e-2
+        self.maxspeed = 0.5
 
         self.dim_p = 2  # (x,y)
-        self.contact_force = np.float32(1e3)
-        self.contact_margin = np.float32(1e-3)
+        self.contact_force = np.float32(5e2)
+        self.contact_margin = np.float32(1e-4)
 
         # Agent controls, every agent has an X, Y positon
         self.positions: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
@@ -86,8 +85,8 @@ class RotatorCoverageWorld:
             forces_v = diffmat * forces_s[..., None]
 
             # 4 integrate collsion forces
-            s = np.sum(forces_v, axis=0)
-            self.velocities += np.sum(forces_v, axis=0) * self.dt
+            self.velocities -= np.sum(forces_v, axis=0) * self.dt
+            breakpoint()
             # self.velocities[self.n_agents:, :] = 0
             # assert np.all(self.velocities[self.n_agents:]) == 0, "Sanity check, landmarks don't move"
         # breakpoint()
@@ -357,10 +356,10 @@ class RotatorCoverageEnv(AECEnv):
     def _execute_world_step(self):
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
-            # self.world.ctrl_thetas[i] = action[0]
-            # self.world.ctrl_speeds[i] = action[1]
-            self.world.ctrl_thetas[i] = 0
-            self.world.ctrl_speeds[i] = 1e-2
+            self.world.ctrl_thetas[i] = action[0]
+            self.world.ctrl_speeds[i] = action[1]
+            # self.world.ctrl_thetas[i] += 1e-1
+            # self.world.ctrl_speeds[i] = 1
 
         self.world.step()
 

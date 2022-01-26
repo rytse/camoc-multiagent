@@ -8,7 +8,7 @@ from pettingzoo.utils.conversions import parallel_wrapper_fn
 
 
 class raw_env(RotatorCoverageEnv):
-    def __init__(self, N=5, local_ratio=0.25, max_cycles=100, continuous_actions=True):
+    def __init__(self, N=5, local_ratio=0.25, max_cycles=50, continuous_actions=True):
         assert (
             0.0 <= local_ratio <= 1.0
         ), "local_ratio is a proportion. Must be between 0 and 1."
