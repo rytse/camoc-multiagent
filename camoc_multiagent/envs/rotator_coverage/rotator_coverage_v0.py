@@ -8,7 +8,7 @@ from pettingzoo.utils.conversions import parallel_wrapper_fn
 
 
 class raw_env(RotatorCoverageEnv):
-    def __init__(self, N=5, local_ratio=0.25, max_cycles=100, continuous_actions=True):
+    def __init__(self, N=10, local_ratio=0.5, max_cycles=100, continuous_actions=True):
         assert (
             0.0 <= local_ratio <= 1.0
         ), "local_ratio is a proportion. Must be between 0 and 1."
@@ -22,7 +22,7 @@ class raw_env(RotatorCoverageEnv):
 def preprocess_train(env):
     def _preprocess_train(**kwargs):
         nenv = env(**kwargs)
-        nenv = ss.frame_stack_v1(nenv, 5)
+        nenv = ss.frame_stack_v1(nenv, 10)
         nenv = ss.pettingzoo_env_to_vec_env_v1(nenv)
         nenv = ss.concat_vec_envs_v1(
             nenv, 1, num_cpus=1, base_class="stable_baselines3"
@@ -36,7 +36,7 @@ def preprocess_train(env):
 def preprocess_eval(env):
     def _preprocess_eval(**kwargs):
         nenv = env(**kwargs)
-        nenv = ss.frame_stack_v1(nenv, 5)
+        nenv = ss.frame_stack_v1(nenv, 10)
         return nenv
 
     return _preprocess_eval

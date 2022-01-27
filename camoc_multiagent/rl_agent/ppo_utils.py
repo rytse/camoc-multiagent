@@ -7,7 +7,11 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
 
 
-def train_ppo(env_train, env_eval, name, total_timesteps, verbose=0, **kwargs):
+def train_ppo(
+    env_train, env_eval, name, total_timesteps, verbose=0, preload_name=None, **kwargs
+):
+    if preload_name is None:
+        preload_name = name
     env_eval.reset()
 
     savebest_cb = EvalCallback(
@@ -20,7 +24,7 @@ def train_ppo(env_train, env_eval, name, total_timesteps, verbose=0, **kwargs):
     )
 
     try:
-        model = PPO.load(f"./policies/{name}")
+        model = PPO.load(f"./policies/{preload_name}")
         model.set_env(env_train)
     except Exception:
         model = PPO(MlpPolicy, env_train, verbose=verbose, **kwargs)

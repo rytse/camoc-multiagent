@@ -204,7 +204,7 @@ class RotatorCoverageScenario:
         coverage_reward = np.var(rel_thetas)
 
         # Combine the two objectives
-        return 10 * coverage_reward - dist_penalty
+        return np.square(coverage_reward) - dist_penalty
 
     def reset_world(self, world, np_random):
         world.reset(np_random)
@@ -348,7 +348,23 @@ class RotatorCoverageEnv(AECEnv):
         self.world.step()
 
         for a, agent in enumerate(self.agents):
-            self.rewards[agent] = self.scenario.global_reward(self.world)
+            # Get distance to landmark
+            dist_landmark = np.linalg.norm(
+                self.world.agents[a] - self.world.landmarks[0]
+            )
+
+            # Get distances to other agents
+            dist_agents = np.linalg.norm(
+                self.world.agents[a] - self.world.agents, axis=1
+            )
+            dist_agents_total = np.sum(dist_agents) / dist_agents.size
+
+            self.rewards[agent] = 1.0 / dist_landmark
+
+            # self.rewards[agent] = 1.0 / dist_landmark + dist_agents_total / np.power(
+            #     dist_landmark, 2
+            # )
+            # self.rewards[agent] = self.scenario.global_reward(self.world)
 
     def step(self, action):
         if self.dones[self.agent_selection]:
