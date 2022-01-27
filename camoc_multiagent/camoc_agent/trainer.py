@@ -11,7 +11,7 @@ from envs.rotator_coverage import rotator_coverage_v0
 # Load the environment (to pull data from!)
 env = rotator_coverage_v0.env_eval()
 
-world = env.env.env.world
+world = env.env.env.env.world
 NUM_AGENTS = world.n_agents
 NUM_TARGETS = world.n_entities - NUM_AGENTS
 MAX_SPEED = world.maxspeed * 2
@@ -44,11 +44,7 @@ def g_constr(obs_mfd):
     """
     Constraints on the observation manifold.
 
-        g_constr(q) = 0 for all q in MFD
-    """
-    # Skip fields TODO remove this for final version for performance benefits
-    c = envschema["dists_to_targets"]["mfd_size"]
-
+        g_constr(q) = 0 for all q in MFD"""  # Skip fields TODO remove this for final version for performance benefits c = envschema["dists_to_targets"]["mfd_size"]
     # Load angle data for constraint
     angle_to_targets = obs_mfd[c : c + envschema["angles_to_targets"]["mfd_size"]]
     # angle_to_targets = angle_to_targets.reshape([2, int(angle_to_targets.shape[0] / 2)])
@@ -95,7 +91,7 @@ def g_constr(obs_mfd):
 cagent = CAMOCAgent(g_constr)
 
 # Load the pretrained RL agent
-model = PPO.load("./policies/cenv_ppo_policy")
+model = PPO.load("./policies/rotator_coverage_v0_ppo_policy_best/best_model")
 
 # Sample a batch of trajectories
 # for tidx in range(100):
