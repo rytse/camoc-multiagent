@@ -21,11 +21,11 @@ class CAMOC_RotatorCoverage_Agent(CAMOC_Env_Agent):
     def make_g_mfds(self):
         pass
 
-    def make_obs2mfd(self):
+    def obs2mfd(self):
         pass
 
-    def make_tpm2act(self):
+    def tpm2act(self):
         pass
 
-    def make_act2tpm(self):
+    def act2tpm(self):
         pass

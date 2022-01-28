@@ -185,13 +185,13 @@ class CAMOC_Env_Agent(ABC):
         pass
 
     @abstractmethod
-    def make_obs2mfd(self):
+    def obs2mfd(self):
         pass
 
     @abstractmethod
-    def make_tpm2act(self):
+    def tpm2act(self):
         pass
 
     @abstractmethod
-    def make_act2tpm(self):
+    def act2tpm(self):
         pass
