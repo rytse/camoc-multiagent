@@ -5,63 +5,6 @@ import numpy as np
 from jax import grad, jit, vmap
 
 
-class CAMOCGManifold:
-    """
-    Manifold defined by a level curve of a function g(x). CAMOC agents
-    represent their observation space as the product manifold of several of
-    these child manifolds. The Newton's method projection step is well-defined
-    on each of these child manifolds, but since there is no one global g(x)
-    function for which the entire observation space is a level curve, we
-    must project onto each child manifold individually.
-    """
-
-    def __init__(self, g_constr, g_grad_constr, h_inv, x_slice, v_slice, n_iters=2):
-        """
-        Create a new level-set manifold object.
-
-        Args:
-            g_constr: level-set constraint function g(x)
-            g_grad_constr: g'(x) (if None, it will be jax.grad(g_constr))
-            h_inv: map from action coords -> tangent vector coords
-            x_slice: indices of parent manifold coordinates to use
-            v_slice: indicies of parent manifold tangent vectors to use
-            n_iters: number of Newton's method iterations to perform
-        """
-
-        self._g_constr = g_constr
-        if g_grad_constr is None:
-            self._g_grad_constr = grad(g_constr)
-        else:
-            self._g_grad_constr = g_grad_constr
-        self._h_inv = h_inv
-        self.x_slice = x_slice
-        self.v_slice = v_slice
-        self._n_iters = n_iters
-
-    def project(self, x, vhat_g):
-        """
-        Take a vector vhat attached to the manifold at point x and project it
-        onto T_x M, and return that vector vbar.
-
-        Args:
-            x: point on manifold
-            vhat_g: action (parent tangent space coords)
-        Returns:
-            vbar: projected "action" (parent tangent space coords)
-        """
-
-        vhat = vhat_g[self.v_slice]  # child tangent vector coords
-
-        ld = 0  # Lagrange multiplier lambda
-        for _ in range(self._n_iters):
-            ggc = self._g_grad_constr(x[self.x_slice])
-            dld = -self._g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
-            ld += dld
-
-        vbar = vhat + self._g_grad_constr(vhat) * ld
-        return vbar
-
-
 class CAMOCAgent:
     """
     Agent that computes policies by interpolating and projecting actions
@@ -85,22 +28,31 @@ class CAMOCAgent:
     issue, we can switch this.
     """
 
-    def __init__(self, g_mfds, obs2mfd, tpm2act, act2tpm):
+    def __init__(
+        self, obs2mfd, tpm2act, act2tpm, g_constr, g_grad_constr=None, n_iters=2
+    ):
         """
         Create a new CAMOC agent.
 
         Args:
-            g_mfds: list of level-set manifolds
             obs2mfd: map from observations to observation space manifold
             tpm2act: map from tangent space -> actions
             act2tpm: map from actions -> tangent space
+            g_constr: level-set constraint function g(x)
+            g_grad_constr: g'(x) (if None, it will be jax.grad(g_constr))
+            n_iters: number of Newton's method iterations to perform (default 2)
         """
-
-        self.g_mfds = g_mfds
 
         self.obs2mfd = obs2mfd
         self.tpm2act = tpm2act
         self.act2tpm = act2tpm
+
+        self.g_constr = g_constr
+        if g_grad_constr is None:
+            self.g_grad_constr = grad(g_constr)
+        else:
+            self.g_grad_constr = g_grad_constr
+        self.n_iters = n_iters
 
         self._mpoints = np.array([])  # samples' locations on the manifold
         self._tmvecs = np.array([])  # samples' associated tangent vectors
@@ -116,10 +68,12 @@ class CAMOCAgent:
 
         if self._mpoints.size == 0:
             self._mpoints = self.obs2mfd(observations)
-            self._tmvecs = self.act2tpm(actions)
+            self._tmvecs = self.act2tpm(actions, observations)
         else:
-            self._mpoints = np.vstack((self._mpoints, self.obs2mdf(observations)))
-            self._tmvecs = np.vstack((self._tmvecs, self.act2tpm(actions)))
+            self._mpoints = np.vstack((self._mpoints, self.obs2mfd(observations)))
+            self._tmvecs = np.vstack(
+                (self._tmvecs, self.act2tpm(actions, observations))
+            )
 
     def policy(self, obs):
         """
@@ -164,34 +118,11 @@ class CAMOCAgent:
             vbar: projected vector
         """
 
-        vbar = np.zeros_like(vhat)
-        for g_mfd in self.g_mfds:
-            vbar[g_mfd.v_slice] = g_mfd.project(x, vhat)
+        ld = 0  # Lagrange multiplier lambda
+        for _ in range(self.n_iters):
+            ggc = self.g_grad_constr(x)
+            dld = -self.g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
+            ld += dld
+
+        vbar = vhat + self.g_grad_constr(vhat) * ld
         return vbar
-
-
-class CAMOC_Env_Agent(ABC):
-    """
-    Abstract base class for a CAMOC environment-agent pair.
-    """
-
-    def __init__(self):
-        self.agent = CAMOCAgent(
-            self.make_g_mfds, self.obs2mfd, self.tpm2act, self.act2tpm
-        )
-
-    @abstractmethod
-    def make_g_mfds(self):
-        pass
-
-    @abstractmethod
-    def obs2mfd(self):
-        pass
-
-    @abstractmethod
-    def tpm2act(self):
-        pass
-
-    @abstractmethod
-    def act2tpm(self):
-        pass

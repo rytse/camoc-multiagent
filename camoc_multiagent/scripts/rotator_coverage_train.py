@@ -2,7 +2,7 @@ from envs.rotator_coverage import rotator_coverage_v0
 from rl_agent.ppo_utils import train_ppo, read_hyperparams
 
 NAME = "rotator_coverage_v0"
-NUM_TIMESTEPS = int(1e5)
+NUM_TIMESTEPS = int(1e4)
 EVAL_RENDER = True
 
 print(f"NUM TIMESTEPS: {NUM_TIMESTEPS}")

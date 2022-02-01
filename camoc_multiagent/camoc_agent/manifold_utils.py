@@ -4,7 +4,6 @@ import numpy as np
 def pos_sign(x):
     y = np.sign(x)
     y[x == 0] = 1
-
     return y
 
 
@@ -15,6 +14,22 @@ def slack_up(x):
 def slack_down(y):
     sgn = np.sign(y)
     return np.power(np.exp(sgn * y), 1 / 10) - sgn
+
+
+def halfinterval2slack(x, a):
+    y = np.zeros(x.size * 3)
+    y[0 : x.size] = x
+    y[x.size : x.size * 2] = slack_up(a - x)
+    y[x.size * 2 :] = slack_up(x)
+    return y
+
+
+def fullinterval2slack(x, a):
+    y = np.zeros(x.size * 3)
+    y[0 : x.size] = x
+    y[x.size : x.size * 2] = slack_up(a - x)
+    y[x.size * 2 :] = slack_up(a + x)
+    return y
 
 
 def identity_factory():
@@ -54,17 +69,14 @@ def halfinterval2slack_factory(a):
 
         (x, alpha, beta),
 
-        alpha = sqrt(1 - x)
+        alpha = sqrt(a - x)
         beta = sqrt(x)
 
     such that the slack variable equality constraints are equivalent to the
     inequailty constraints 0 <= x <= a
     """
 
-    def halfinterval2slack(x):
-        return np.array([x, slack_up(a - x), slack_up(x)]).flatten()
-
-    return halfinterval2slack
+    return lambda x: halfinterval2slack(x, a)
 
 
 def fullinterval2slack_factory(a):
@@ -84,10 +96,7 @@ def fullinterval2slack_factory(a):
     inequailty constraints -a <= x <= a
     """
 
-    def fullinterval2slack(x):
-        return np.array([x, slack_up(a - x), slack_up(a + x)]).flatten()
-
-    return fullinterval2slack
+    return lambda x: fullinterval2slack(x, a)
 
 
 def obs_native2mfd(native, schema):
