@@ -47,6 +47,7 @@ class RotatorCoverageWorld:
         self.entity_sizes: np.ndarray = entity_sizes
 
         self.sizemat = self.entity_sizes[..., None] + self.entity_sizes[None, ...]
+        self.sizemat[np.diag_indices(self.sizemat.shape[0])] = 0
         self.diag_indices = np.diag_indices(self.positions.shape[0])
 
     def step(self) -> None:
@@ -68,10 +69,15 @@ class RotatorCoverageWorld:
         if np.any(self.collisions):
             # Calculate collison forces
             penetrations = (
-                np.logaddexp(0, -(dist_matrix - self.sizemat) / self.contact_margin)
+                np.logaddexp(
+                    1e-5, -(dist_matrix - self.sizemat + 1e-4) / self.contact_margin
+                )
                 * self.contact_margin
                 * self.collisions
             )
+
+            if np.isnan(penetrations).any():
+                breakpoint()
 
             forces_s: np.float32 = self.contact_force * penetrations * self.collisions
             diffmat: np.ndarray = (

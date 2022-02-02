@@ -102,14 +102,16 @@ class CAMOC_RotatorCoverage_Agent:
         return v
 
     def _g_constr(self, x):
-        a2t_constr = np.linalg.norm(x[self.m_a2t : self.m_d2a]) - 1  # = 0
+        a2t_constr = np.sum(np.square(x[self.m_a2t : self.m_d2a])) - 1  # = 0
 
         xs = x[self.m_s2a :: 3]
         alphas = x[self.m_s2a + 1 :: 3]
         betas = x[self.m_s2a + 2 :: 3]
 
-        alpha_constrs = alphas * alphas + xs - self.max_speed  # = 0
-        beta_constrs = betas * betas - xs  # = 0
+        # alpha_constrs = alphas * alphas + xs - self.max_speed  # = 0
+        # beta_constrs = betas * betas - xs  # = 0
+        alpha_constrs = np.exp(alphas) + xs + self.max_speed - 1  # = 0
+        beta_constrs = np.exp(betas) - xs - 1  # = 0
 
         all_constrs = (
             np.square(a2t_constr)

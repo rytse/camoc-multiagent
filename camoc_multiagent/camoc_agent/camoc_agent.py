@@ -90,6 +90,8 @@ class CAMOCAgent:
         vhat = np.average(self._tmvecs[idxs], axis=0)
         vbar = self._project_onto_mfd(obs_m, vhat)
         v = self.tpm2act(vbar, obs_m)
+        if np.isnan(v).any():
+            breakpoint()
         return v
 
     def _find_nearest_simplex(self, mpoint):
@@ -126,5 +128,11 @@ class CAMOCAgent:
             dld = -self.g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
             ld += dld
 
+            if np.isnan(ggc).any() or np.isnan(dld):
+                breakpoint()
+
         vbar = vhat + self.g_grad_constr(vhat) * ld
+
+        if np.isnan(vbar).any():
+            breakpoint()
         return vbar

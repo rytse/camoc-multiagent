@@ -1,34 +1,28 @@
-import numpy as np
-
-
-def pos_sign(x):
-    y = np.sign(x)
-    y[x == 0] = 1
-    return y
-
-
-def slack_up(x):
-    return pos_sign(x) * np.log(np.power(x + pos_sign(x), 10))
-
-
-def slack_down(y):
-    sgn = np.sign(y)
-    return np.power(np.exp(sgn * y), 1 / 10) - sgn
+# import numpy as np
+import jax.numpy as np
 
 
 def halfinterval2slack(x, a):
     y = np.zeros(x.size * 3)
-    y[0 : x.size] = x
-    y[x.size : x.size * 2] = slack_up(a - x)
-    y[x.size * 2 :] = slack_up(x)
+    y.at[0 : x.size].set(x)
+    # y.at[x.size : x.size * 2].set(np.sqrt(a - x))
+    # y.at[x.size * 2 :].set(np.sqrt(x))
+    y.at[x.size : x.size * 2].set(np.log(a - x + 1))
+    y.at[x.size * 2 :].set(np.log(x + 1))
+    if np.isnan(y).any():
+        breakpoint()
     return y
 
 
 def fullinterval2slack(x, a):
     y = np.zeros(x.size * 3)
-    y[0 : x.size] = x
-    y[x.size : x.size * 2] = slack_up(a - x)
-    y[x.size * 2 :] = slack_up(a + x)
+    y.at[0 : x.size].set(x)
+    # y.at[x.size : x.size * 2].set(np.sqrt(a - x))
+    # y.at[x.size * 2 :].set(np.sqrt(a + x))
+    y.at[x.size : x.size * 2].set(np.log(a - x + 1))
+    y.at[x.size * 2 :].set(np.log(a + x + 1))
+    if np.isnan(y).any():
+        breakpoint()
     return y
 
 

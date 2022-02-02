@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import jax.numpy as jnp
 
@@ -39,7 +41,6 @@ for tidx in range(2):
         obs, reward, done, info = env.last()
         act = model.predict(obs, deterministic=True)[0] if not done else None
         env.step(act)
-        # env.render()
         if not done:  # TODO slice off framestack sanely
             cagent.add_samples(jnp.asarray(obs[-20:]), jnp.asarray(act))
         else:
@@ -47,9 +48,21 @@ for tidx in range(2):
 
 # Eval the CAMOC agent
 env.reset()
+num_zero_actions = 0
 for agent in env.agent_iter():
     obs, reward, done, info = env.last()
+
+    if done:
+        break
+
     act = cagent.policy(jnp.asarray(obs[-20:]))
+
+    if not act.any():
+        num_zero_actions += 1
+        if num_zero_actions == 10:
+            break
 
     env.render()
     env.step(act)
+
+sys.exit(0)
