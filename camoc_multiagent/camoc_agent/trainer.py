@@ -24,7 +24,7 @@ print(f"Num targets: {NUM_TARGETS}")
 cagent = CAMOC_RotatorCoverage_Agent(NUM_TARGETS, NUM_AGENTS, MAX_SPEED, DT)
 
 # Load the pretrained RL agent
-model = PPO.load("./policies/rotator_coverage_v0_2022_01_28_14_11")
+model = PPO.load("./policies/rotator_coverage_v0_2022_01_26_23_36")
 
 # Sample a batch of trajectories
 # for tidx in range(100):
@@ -41,7 +41,7 @@ for tidx in range(2):
         env.step(act)
         # env.render()
         if not done:  # TODO slice off framestack sanely
-            cagent.add_samples(obs[-20:], act)
+            cagent.add_samples(jnp.asarray(obs[-20:]), jnp.asarray(act))
         else:
             break
 
@@ -49,7 +49,7 @@ for tidx in range(2):
 env.reset()
 for agent in env.agent_iter():
     obs, reward, done, info = env.last()
-    act = cagent.policy(obs[-20:])
+    act = cagent.policy(jnp.asarray(obs[-20:]))
 
     env.render()
     env.step(act)

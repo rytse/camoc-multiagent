@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
-# import jax.numpy as np
-import numpy as np
+import jax.numpy as np
+
+# import numpy as np
 from jax import grad, jit, vmap
 
 
@@ -84,11 +85,11 @@ class CAMOCAgent:
         Returns:
             action
         """
-        obs = self.obs2mfd(obs)
-        idxs = self._find_nearest_simplex(obs)
+        obs_m = self.obs2mfd(obs)
+        idxs = self._find_nearest_simplex(obs_m)
         vhat = np.average(self._tmvecs[idxs], axis=0)
-        vbar = self._project_onto_mfd(obs, vhat)
-        v = self.tpm2act(vbar)
+        vbar = self._project_onto_mfd(obs_m, vhat)
+        v = self.tpm2act(vbar, obs_m)
         return v
 
     def _find_nearest_simplex(self, mpoint):
@@ -103,7 +104,8 @@ class CAMOCAgent:
 
         differences = self._mpoints - mpoint
         dists = np.linalg.norm(differences, axis=1)
-        order = np.argpartition(dists, 3)
+        # order = np.argpartition(dists, 3)
+        order = np.argsort(dists)
         return order[0:3]
 
     def _project_onto_mfd(self, x, vhat):

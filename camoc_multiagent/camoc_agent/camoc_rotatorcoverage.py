@@ -1,5 +1,6 @@
 from camoc_agent.camoc_agent import CAMOCAgent
 from camoc_agent.manifold_utils import *
+import jax.numpy as np
 
 
 class CAMOC_RotatorCoverage_Agent:
@@ -30,7 +31,6 @@ class CAMOC_RotatorCoverage_Agent:
         self.o_a2t = self.o_d2t + num_targets
         self.o_d2a = self.o_a2t + num_targets
         self.o_s2a = self.o_d2a + num_agents - 1
-
         # Pre-compute indices for the various slices of the manifold coords
         self.mfd_len = (
             num_targets + num_targets * 2 + (num_agents - 1) + (num_agents - 1) * 3
@@ -54,11 +54,11 @@ class CAMOC_RotatorCoverage_Agent:
     def _obs2mfd(self, obs):
         x = np.zeros(self.mfd_len)
 
-        x[self.m_d2t : self.m_a2t] = obs[self.o_d2t : self.o_a2t]
-        x[self.m_a2t : self.m_d2a : 2] = np.cos(obs[self.o_a2t : self.o_d2a])
-        x[self.m_a2t + 1 : self.m_d2a : 2] = np.sin(obs[self.o_a2t : self.o_d2a])
-        x[self.m_d2a : self.m_s2a] = obs[self.o_d2a : self.o_s2a]
-        x[self.m_s2a :] = halfinterval2slack(obs[self.o_s2a :], self.max_speed)
+        x.at[self.m_d2t : self.m_a2t].set(obs[self.o_d2t : self.o_a2t])
+        x.at[self.m_a2t : self.m_d2a : 2].set(np.cos(obs[self.o_a2t : self.o_d2a]))
+        x.at[self.m_a2t + 1 : self.m_d2a : 2].set(np.sin(obs[self.o_a2t : self.o_d2a]))
+        x.at[self.m_d2a : self.m_s2a].set(obs[self.o_d2a : self.o_s2a])
+        x.at[self.m_s2a :].set(halfinterval2slack(obs[self.o_s2a :], self.max_speed))
 
         return x
 
@@ -92,21 +92,29 @@ class CAMOC_RotatorCoverage_Agent:
         dx = act[0] * np.cos(act[1])  # change in x-y due to action
         dy = act[0] * np.sin(act[1])
         Dd = np.linalg.norm(np.array([Dx - dx, Dy - dy]))  # closer/farther
-        v[0] = Dd * self.dt  # this one gets integrated
 
         dtheta = a2t - act[1]
-        v[1] = np.cos(dtheta)
-        v[2] = np.sin(dtheta)
 
-        return v  # other components have zero change in expected value
+        v.at[self.m_d2t].set(Dd * self.dt)
+        v.at[self.m_a2t].set(np.cos(dtheta))
+        v.at[self.m_a2t + 1].set(np.sin(dtheta))  # the rest are zeros
 
-    def _g_constr(self, v):
-        a2t_constr = np.linalg.norm(v[self.m_a2t : self.m_d2a]) - 1  # = 0
+        return v
 
-        x, alpha, beta = v[self.m_s2a :]
-        s2a_alpha_constr = alpha * alpha + x - self.max_speed  # = 0
-        s2a_beta_constr = beta * beta - x  # = 0
+    def _g_constr(self, x):
+        a2t_constr = np.linalg.norm(x[self.m_a2t : self.m_d2a]) - 1  # = 0
 
-        constr_v = np.array([a2t_constr, s2a_alpha_constr, s2a_beta_constr])
+        xs = x[self.m_s2a :: 3]
+        alphas = x[self.m_s2a + 1 :: 3]
+        betas = x[self.m_s2a + 2 :: 3]
 
-        return np.sum(np.power(constr_v))  # only 0 when all components 0
+        alpha_constrs = alphas * alphas + xs - self.max_speed  # = 0
+        beta_constrs = betas * betas - xs  # = 0
+
+        all_constrs = (
+            np.square(a2t_constr)
+            + np.sum(np.square(alpha_constrs))
+            + np.sum(np.square(beta_constrs))
+        )
+
+        return all_constrs
