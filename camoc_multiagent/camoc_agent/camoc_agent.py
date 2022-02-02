@@ -30,7 +30,17 @@ class CAMOCAgent:
     """
 
     def __init__(
-        self, obs2mfd, tpm2act, act2tpm, g_constr, g_grad_constr=None, n_iters=2
+        self,
+        obs_size,
+        act_size,
+        mfd_size,
+        obs2mfd,
+        tpm2act,
+        act2tpm,
+        g_constr,
+        g_grad_constr=None,
+        n_iters=2,
+        prealloc_size=50_000_000,
     ):
         """
         Create a new CAMOC agent.
@@ -55,8 +65,16 @@ class CAMOCAgent:
             self.g_grad_constr = g_grad_constr
         self.n_iters = n_iters
 
-        self._mpoints = np.array([])  # samples' locations on the manifold
-        self._tmvecs = np.array([])  # samples' associated tangent vectors
+        self.prealloc_size = prealloc_size
+
+        self._obs = np.zeros((prealloc_size, obs_size))
+        self._act = np.zeros((prealloc_size, act_size))
+
+        self._obs_idx = 0
+        self._act_idx = 0
+
+        self._mpoints = None
+        self._tmvecs = None
 
     def add_samples(self, observations, actions):
         """
@@ -67,14 +85,35 @@ class CAMOCAgent:
             actions: list of actions
         """
 
-        if self._mpoints.size == 0:
-            self._mpoints = self.obs2mfd(observations)
-            self._tmvecs = self.act2tpm(actions, observations)
-        else:
-            self._mpoints = np.vstack((self._mpoints, self.obs2mfd(observations)))
-            self._tmvecs = np.vstack(
-                (self._tmvecs, self.act2tpm(actions, observations))
+        # Resize as needed
+        if self._obs.shape[0] <= self._obs_idx + len(observations):
+            old_obs = self._obs
+            old_act = self._act
+
+            self._obs = np.zeros(
+                (old_obs.shape[0] + self.prealloc_size, old_obs.shape[1])
             )
+            self._act = np.zeros(
+                (old_act.shape[0] + self.prealloc_size, old_act.shape[1])
+            )
+
+            self._obs.at[: old_obs.shape[0]].set(old_obs)
+            self._act.at[: old_act.shape[0]].set(old_act)
+
+        self._obs.at[self._obs_idx : self._obs_idx + len(observations)].set(
+            observations
+        )
+        self._act.at[self._act_idx : self._act_idx + len(actions)].set(actions)
+
+        self._obs_idx += len(observations)
+        self._act_idx += len(actions)
+
+        self._mpoints = None
+        self._tmvecs = None
+
+    def aggregate_samples(self):
+        self._mpoints = self.obs2mfd(self._obs)
+        self._tmvecs = self.act2tpm(self._act)
 
     def policy(self, obs):
         """

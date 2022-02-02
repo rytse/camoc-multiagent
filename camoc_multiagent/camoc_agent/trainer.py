@@ -46,6 +46,8 @@ for tidx in range(2):
         else:
             break
 
+breakpoint()
+
 # Eval the CAMOC agent
 env.reset()
 num_zero_actions = 0

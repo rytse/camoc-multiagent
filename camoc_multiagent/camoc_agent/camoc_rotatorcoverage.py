@@ -42,11 +42,20 @@ class CAMOC_RotatorCoverage_Agent:
 
         # Create the CAMOC agent
         self.cagent = CAMOCAgent(
-            self._obs2mfd, self._tpm2act, self._act2tpm, self._g_constr
+            self.obs_len,
+            2,
+            self.mfd_len,
+            self._obs2mfd,
+            self._tpm2act,
+            self._act2tpm,
+            self._g_constr,
         )
 
     def add_samples(self, observations, actions):
         self.cagent.add_samples(observations, actions)
+
+    def aggregate_samples(self):
+        self.cagent.aggregate_samples()
 
     def policy(self, obs):
         return self.cagent.policy(obs)
