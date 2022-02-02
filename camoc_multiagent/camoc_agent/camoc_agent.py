@@ -67,8 +67,8 @@ class CAMOCAgent:
 
         self.prealloc_size = prealloc_size
 
-        self._obs = np.zeros((prealloc_size, obs_size))
-        self._act = np.zeros((prealloc_size, act_size))
+        self._obs = np.empty((prealloc_size, obs_size))
+        self._act = np.empty((prealloc_size, act_size))
 
         self._obs_idx = 0
         self._act_idx = 0
@@ -86,7 +86,7 @@ class CAMOCAgent:
         """
 
         # Resize as needed
-        if self._obs.shape[0] <= self._obs_idx + len(observations):
+        if self._obs.shape[0] <= self._obs_idx + observations.size:
             old_obs = self._obs
             old_act = self._act
 
@@ -97,23 +97,23 @@ class CAMOCAgent:
                 (old_act.shape[0] + self.prealloc_size, old_act.shape[1])
             )
 
-            self._obs.at[: old_obs.shape[0]].set(old_obs)
-            self._act.at[: old_act.shape[0]].set(old_act)
+            self._obs.at[: old_obs.shape[0], :].set(old_obs)
+            self._act.at[: old_act.shape[0], :].set(old_act)
 
-        self._obs.at[self._obs_idx : self._obs_idx + len(observations)].set(
+        self._obs.at[self._obs_idx : self._obs_idx + observations.size, :].set(
             observations
         )
-        self._act.at[self._act_idx : self._act_idx + len(actions)].set(actions)
+        self._act.at[self._act_idx : self._act_idx + actions.size, :].set(actions)
 
-        self._obs_idx += len(observations)
-        self._act_idx += len(actions)
+        self._obs_idx += observations.size
+        self._act_idx += actions.size
 
         self._mpoints = None
         self._tmvecs = None
 
     def aggregate_samples(self):
-        self._mpoints = self.obs2mfd(self._obs)
-        self._tmvecs = self.act2tpm(self._act)
+        self._mpoints = self.obs2mfd(self._obs[: self._obs_idx, :])
+        self._tmvecs = self.act2tpm(self._act[: self._act_idx, :])
 
     def policy(self, obs):
         """
