@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-
-import jax.numpy as np
+from functools import partial
+import jax.numpy as jnp
 
 from jax import grad, jit, vmap
 from jax.lax import dynamic_update_slice
@@ -9,7 +9,6 @@ from jax.lax import dynamic_update_slice
 def _add_samples_cm(obs, act, obs_buf, act_buf, buf_idx):
     obs_buf = dynamic_update_slice(obs_buf, obs, (buf_idx, 0))
     act_buf = dynamic_update_slice(act_buf, act, (buf_idx, 0))
-
     return obs_buf, act_buf
 
 
@@ -78,8 +77,8 @@ class CAMOCAgent:
 
         self.prealloc_size = prealloc_size
 
-        self._obs = np.empty((prealloc_size, obs_size))
-        self._act = np.empty((prealloc_size, act_size))
+        self._obs = jnp.empty((prealloc_size, obs_size))
+        self._act = jnp.empty((prealloc_size, act_size))
 
         self._obs_idx = 0
         self._act_idx = 0
@@ -87,6 +86,7 @@ class CAMOCAgent:
         self._mpoints = None
         self._tmvecs = None
 
+    @partial(jit, static_argnums=(0,))
     def add_samples(self, observations, actions):
         """
         Add new samples to the agent's memory.
@@ -101,10 +101,10 @@ class CAMOCAgent:
 #             old_obs = self._obs
 #             old_act = self._act
 # 
-#             self._obs = np.zeros(
+#             self._obs = jnp.zeros(
 #                 (old_obs.shape[0] + self.prealloc_size, old_obs.shape[1])
 #             )
-#             self._act = np.zeros(
+#             self._act = jnp.zeros(
 #                 (old_act.shape[0] + self.prealloc_size, old_act.shape[1])
 #             )
 # 
@@ -137,10 +137,10 @@ class CAMOCAgent:
         """
         obs_m = self.obs2mfd(obs)
         idxs = self._find_nearest_simplex(obs_m)
-        vhat = np.average(self._tmvecs[idxs], axis=0)
+        vhat = jnp.average(self._tmvecs[idxs], axis=0)
         vbar = self._project_onto_mfd(obs_m, vhat)
         v = self.tpm2act(vbar, obs_m)
-        if np.isnan(v).any():
+        if jnp.isnan(v).any():
             breakpoint()
         return v
 
@@ -155,9 +155,9 @@ class CAMOCAgent:
         """
 
         differences = self._mpoints - mpoint
-        dists = np.linalg.norm(differences, axis=1)
-        # order = np.argpartition(dists, 3)
-        order = np.argsort(dists)
+        dists = jnp.linalg.norm(differences, axis=1)
+        # order = jnp.argpartition(dists, 3)
+        order = jnp.argsort(dists)
         return order[0:3]
 
     @classmethod
@@ -177,7 +177,7 @@ class CAMOCAgent:
         ld = 0  # Lagrange multiplier lambda
         for _ in range(n_iters):
             ggc = g_grad_constr(x)
-            dld = -g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
+            dld = -g_constr(vhat + ggc * ld) / jnp.inner(ggc, ggc)
             ld += dld
 
         return vhat + g_grad_constr(vhat) * ld
@@ -193,7 +193,7 @@ class CAMOCAgent:
         Returns:
             vbar: projected vector
         """
-
-        return _project_onto_mfd_cm(
+        # fuck you ryan ur retarded
+        return self._project_onto_mfd_cm(
             x, vhat, self.g_constr, self.g_grad_constr, self.n_iters
         )
