@@ -2,9 +2,20 @@ from abc import ABC, abstractmethod
 
 import jax.numpy as np
 
-# import numpy as np
 from jax import grad, jit, vmap
+from jax.lax import dynamic_update_slice
 
+@jit
+def _add_samples_cm(obs, act, obs_buf, act_buf, buf_idx):
+    obs_buf = dynamic_update_slice(obs_buf, obs, (buf_idx, 0))
+    act_buf = dynamic_update_slice(act_buf, act, (buf_idx, 0))
+
+    return obs_buf, act_buf
+
+
+#def _in_place_dus(buf, x, idx):
+#    x = dynamic_update_slice(buf, x, idx)
+#    return x
 
 class CAMOCAgent:
     """
@@ -85,31 +96,31 @@ class CAMOCAgent:
             actions: list of actions
         """
 
-        # Resize as needed
-        if self._obs.shape[0] <= self._obs_idx + observations.size:
-            old_obs = self._obs
-            old_act = self._act
+        # Resize as needed (not in place, this makes a copy!)
+#         if self._obs.shape[0] <= self._obs_idx + observations.shape[0]:
+#             old_obs = self._obs
+#             old_act = self._act
+# 
+#             self._obs = np.zeros(
+#                 (old_obs.shape[0] + self.prealloc_size, old_obs.shape[1])
+#             )
+#             self._act = np.zeros(
+#                 (old_act.shape[0] + self.prealloc_size, old_act.shape[1])
+#             )
+# 
+#             self._obs = self._obs.at[: old_obs.shape[0], :].set(old_obs)
+#             self._act = self._act.at[: old_act.shape[0], :].set(old_act)
+#        
+#         #self._obs = _in_place_dus(self._obs, observations, (self._obs_idx, 0))
+        #self._act = _in_place_dus(self._act, actions, (self._act_idx, 0))
 
-            self._obs = np.zeros(
-                (old_obs.shape[0] + self.prealloc_size, old_obs.shape[1])
-            )
-            self._act = np.zeros(
-                (old_act.shape[0] + self.prealloc_size, old_act.shape[1])
-            )
+        self._obs, self._act = _add_samples_cm(observations, actions, self._obs, self._act, self._obs_idx)
 
-            self._obs.at[: old_obs.shape[0], :].set(old_obs)
-            self._act.at[: old_act.shape[0], :].set(old_act)
-
-        self._obs.at[self._obs_idx : self._obs_idx + observations.size, :].set(
-            observations
-        )
-        self._act.at[self._act_idx : self._act_idx + actions.size, :].set(actions)
-
-        self._obs_idx += observations.size
-        self._act_idx += actions.size
-
-        self._mpoints = None
-        self._tmvecs = None
+#         self._obs = dynamic_update_slice(self._obs, observations, (self._obs_idx, 0))
+#         self._act = dynamic_update_slice(self._act, actions, (self._act_idx, 0))
+# 
+        self._obs_idx += observations.shape[0]
+        self._act_idx += actions.shape[0]
 
     def aggregate_samples(self):
         self._mpoints = self.obs2mfd(self._obs[: self._obs_idx, :])
@@ -149,7 +160,9 @@ class CAMOCAgent:
         order = np.argsort(dists)
         return order[0:3]
 
-    def _project_onto_mfd(self, x, vhat):
+    @classmethod
+    @jit
+    def _project_onto_mfd_cm(x, vhat, g_constr, g_grad_constr, n_iters):
         """
         Project a vector vhat onto the manifold at point x by aggregating
         the projection of each child manifold.
@@ -162,16 +175,25 @@ class CAMOCAgent:
         """
 
         ld = 0  # Lagrange multiplier lambda
-        for _ in range(self.n_iters):
-            ggc = self.g_grad_constr(x)
-            dld = -self.g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
+        for _ in range(n_iters):
+            ggc = g_grad_constr(x)
+            dld = -g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
             ld += dld
 
-            if np.isnan(ggc).any() or np.isnan(dld):
-                breakpoint()
+        return vhat + g_grad_constr(vhat) * ld
 
-        vbar = vhat + self.g_grad_constr(vhat) * ld
+    def _project_onto_mfd(self, x, vhat):
+        """
+        Project a vector vhat onto the manifold at point x by aggregating
+        the projection of each child manifold.
 
-        if np.isnan(vbar).any():
-            breakpoint()
-        return vbar
+        Args:
+            x: point on the manifold
+            vhat: vector to project
+        Returns:
+            vbar: projected vector
+        """
+
+        return _project_onto_mfd_cm(
+            x, vhat, self.g_constr, self.g_grad_constr, self.n_iters
+        )
