@@ -1,28 +1,27 @@
-# import numpy as np
+from functools import partial
+
+from jax import jit
 import jax.numpy as np
 
 
+@partial(jit, static_argnums=(1,))
 def halfinterval2slack(x, a):
-    y = np.zeros(x.size * 3)
-    y.at[0 : x.size].set(x)
-    # y.at[x.size : x.size * 2].set(np.sqrt(a - x))
-    # y.at[x.size * 2 :].set(np.sqrt(x))
-    y.at[x.size : x.size * 2].set(np.log(a - x + 1))
-    y.at[x.size * 2 :].set(np.log(x + 1))
-    if np.isnan(y).any():
-        breakpoint()
+    y = np.zeros((x.shape[0], x.shape[1] * 3))
+
+    y.at[:, : x.shape[1]].set(x)
+    y.at[:, x.shape[1] : 2 * x.shape[1]].set(np.log(a - x + 1))
+    y.at[:, 2 * x.shape[1] :].set(np.log(x + 1))
+
     return y
 
 
+@jit
 def fullinterval2slack(x, a):
     y = np.zeros(x.size * 3)
     y.at[0 : x.size].set(x)
-    # y.at[x.size : x.size * 2].set(np.sqrt(a - x))
-    # y.at[x.size * 2 :].set(np.sqrt(a + x))
     y.at[x.size : x.size * 2].set(np.log(a - x + 1))
     y.at[x.size * 2 :].set(np.log(a + x + 1))
-    if np.isnan(y).any():
-        breakpoint()
+
     return y
 
 
