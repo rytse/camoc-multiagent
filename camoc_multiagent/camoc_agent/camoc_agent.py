@@ -141,7 +141,7 @@ class CAMOCAgent(ABC):
         """
 
         return self.__class__._project_onto_mfd_cm(
-            x, vhat, self.g_constr, self.g_grad_constr, self.n_iters
+            x, vhat, self.g_constr, self._g_grad_constr, self.n_iters
         )
 
     @staticmethod
@@ -165,6 +165,8 @@ class CAMOCAgent(ABC):
             dld = -g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
             ld += dld
         '''
+        
+        
         
 
         return vhat #+ g_grad_constr(np.array([vhat])) * ld
@@ -218,3 +220,11 @@ class CAMOCAgent(ABC):
             g(x): level-set constraint
         """
         pass
+
+    @abstractmethod
+    def _g_grad_constr(self, x):
+        """
+        I don't know ryan come up with some bullshit, big brain, spe
+        """
+        pass
+
