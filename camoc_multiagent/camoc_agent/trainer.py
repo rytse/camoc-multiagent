@@ -2,14 +2,14 @@ import sys
 import pickle
 
 import numpy as np
-import jax.numpy as jnp
+
 
 from stable_baselines3 import PPO
 
 import camoc_agent.camoc_rotatorcoverage
 from camoc_agent.manifold_utils import *
 from envs.rotator_coverage import rotator_coverage_v0
-
+import time
 
 # Load the environment (to pull data from!)
 env = rotator_coverage_v0.env_eval()
@@ -29,14 +29,14 @@ cagent = camoc_agent.camoc_rotatorcoverage.CAMOC_RotatorCoverage_Agent(
 model = PPO.load("./policies/rotator_coverage_v0_2022_01_26_23_36")
 
 # Sample a batch of trajectories
-for tidx in range(200):
+s = time.time()
+for tidx in range(1):
     if tidx % 10 == 0:
         print("Sampling trajectory {}".format(tidx))
 
     env.reset()
 
-    obs_array = jnp.empty((NUM_AGENTS, cagent.obs_size))
-    act_array = jnp.empty((NUM_AGENTS, cagent.act_size))
+
 
     for i, agent in enumerate(env.agent_iter()):
         obs, reward, done, info = env.last()
@@ -44,20 +44,24 @@ for tidx in range(200):
         env.step(act)
 
         if not done:  # TODO slice off framestack sanely
-            obs_array.at[i, :].set(obs[-20:])
-            act_array.at[i, :].set(act)
+            #breakpoint()
+            cagent.add_samples(np.array([obs[-20:]]), np.array([act]))
         else:
             break
 
-    cagent.add_samples(obs_array, act_array)
 
 # Save agent
 # with open("camoc_agent/policies/camoc_agent.pickle", "wb") as fi:
 #     pickle.dump(cagent, fi)
 
+
+print(f"Time: {time.time() - s}")
+
+
 # Eval the CAMOC agent
 cagent.aggregate_samples()
 env.reset()
+#breakpoint()
 num_zero_actions = 0
 for agent in env.agent_iter():
     obs, reward, done, info = env.last()
@@ -65,7 +69,7 @@ for agent in env.agent_iter():
     if done:
         break
 
-    act = cagent.policy(jnp.asarray(obs[-20:]))
+    act = cagent.policy(np.array(obs[-20:]))
 
     env.render()
     env.step(act.ravel())

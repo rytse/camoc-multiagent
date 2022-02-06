@@ -1,8 +1,9 @@
 from functools import partial
 
-from jax import jit
-import jax.numpy as np
-from jax.lax import dynamic_slice, dynamic_update_slice
+#from jax import jit
+import numpy as np
+import jax.numpy as jnp
+#from jax.lax import dynamic_slice, dynamic_update_slice
 
 from camoc_agent.camoc_agent import CAMOCAgent
 from camoc_agent.manifold_utils import *
@@ -26,12 +27,12 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
 
     def __init__(
         self,
-        num_targets,
-        num_agents,
-        max_speed,
-        dt,
-        n_iters=2,
-        prealloc_size=50_000_000,
+        num_targets: int,
+        num_agents: int,
+        max_speed: float,
+        dt: float,
+        n_iters: int = 2,
+        prealloc_size: int =  50_000_000,
     ):
         """
         Initialize a RotatorCoverage agent.
@@ -99,7 +100,7 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         )
 
     @staticmethod
-    @partial(jit, static_argnums=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+    #@partial(jit, static_argnums=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))
     def _obs2mfd_cm(
         obs,
         obs_len,
@@ -147,8 +148,8 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # ^ wrong indexing!
         obs_a2t = obs[:num_obs, o_a2t:o_d2a].flatten()
         a2t_mfd = np.empty((num_obs, 2))
-        a2t_mfd.at[:, 0].set(np.cos(obs_a2t))
-        a2t_mfd.at[:, 1].set(np.sin(obs_a2t))
+        a2t_mfd[:, 0] = np.cos(obs_a2t)
+        a2t_mfd[:, 1] = np.sin(obs_a2t)
 
         # Distance to agents is not changed
         # d2a_mfd = dynamic_slice(obs, (0, o_d2a), (num_obs, o_s2a - o_d2a))
@@ -167,14 +168,14 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         #        mfd_buf = dynamic_update_slice(mfd_buf, a2t_mfd, (0, m_a2t))
         #        mfd_buf = dynamic_update_slice(mfd_buf, d2a_mfd, (0, m_d2a))
         #        mfd_buf = dynamic_update_slice(mfd_buf, s2a_mfd, (0, m_s2a))
-        mfd_buf = mfd_buf.at[:, m_d2t:m_a2t].set(d2t_mfd)
-        mfd_buf = mfd_buf.at[:, m_a2t:m_d2a].set(a2t_mfd)
-        mfd_buf = mfd_buf.at[:, m_d2a:m_s2a].set(d2a_mfd)
-        mfd_buf = mfd_buf.at[:, m_s2a:].set(s2a_mfd)
+        mfd_buf[:, m_d2t:m_a2t] = d2t_mfd
+        mfd_buf[:, m_a2t:m_d2a] = a2t_mfd
+        mfd_buf[:, m_d2a:m_s2a] = d2a_mfd 
+        mfd_buf[:, m_s2a:] = s2a_mfd
 
         return mfd_buf
 
-    @partial(jit, static_argnums=(0, 3))
+    #@partial(jit, static_argnums=(0, 3))
     def act2tpm(self, act, obs, num_obs):
         return self.__class__._act2tpm_cm(
             act,
@@ -189,7 +190,7 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         )
 
     @staticmethod
-    @partial(jit, static_argnums=(2, 3, 4, 5, 6, 7, 8))
+    #@partial(jit, static_argnums=(2, 3, 4, 5, 6, 7, 8))
     def _act2tpm_cm(act, obs, mfd_len, num_obs, o_d2t, o_a2t, m_d2t, m_a2t, dt):
 
         # This assumes only one target for now TODO make it work for multiple
@@ -207,13 +208,13 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         dtheta = a2t - act[:num_obs, 1].ravel()
 
         v = np.empty((num_obs, mfd_len))
-        v = v.at[:m_d2t].set(Dd * dt)
-        v = v.at[:, m_a2t].set(np.cos(dtheta))
-        v = v.at[:, m_a2t + 1].set(np.sin(dtheta))  # the rest are zeros
+        v[:, m_d2t] = Dd * dt
+        v[:, m_a2t] = np.cos(dtheta)
+        v[:, m_a2t + 1] = np.sin(dtheta)  # the rest are zeros
 
         return v
 
-    @partial(jit, static_argnums=(0,))
+    #@partial(jit, static_argnums=(0,))
     def tpm2act(self, tpm, obs):
         """
         Convert a TPM to an action. Calls the jax jited static method _tpm2act_cm.
@@ -230,12 +231,15 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         )
 
     @staticmethod
-    @partial(jit, static_argnums=(2, 3, 4, 5, 6))
+    #@partial(jit, static_argnums=(2, 3, 4, 5, 6))
     def _tpm2act_cm(tpm, obs, o_d2t, o_a2t, m_d2t, m_a2t, dt):
+        #breakpoint()
         d_old = obs[:, o_d2t]
         phi_old = obs[:, o_a2t]
-        d_new = d_old + tpm[:, m_d2t] * dt
-        phi_new = phi_old + tpm[:, m_a2t] * dt
+        #d_new = d_old + tpm[:, m_d2t] * dt
+        d_new = d_old + tpm[m_d2t] * dt
+        #phi_new = phi_old + tpm[:, m_a2t] * dt
+        phi_new = phi_old + tpm[m_a2t] * dt
 
         l_x_new = d_new * np.cos(phi_new)
         l_y_new = d_new * np.sin(phi_new)
@@ -250,14 +254,14 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         act = np.array([theta_new, speed_new])
         return act
 
-    @partial(jit, static_argnums=(0,))
+    #@partial(jit, static_argnums=(0,))
     def g_constr(self, x):
         return self.__class__._g_constr_cm(
             x, self.m_a2t, self.m_d2a, self.m_s2a, self.max_speed
         )
 
     @staticmethod
-    @partial(jit, static_argnums=(1, 2, 3, 4))
+    #@partial(jit, static_argnums=(1, 2, 3, 4))
     def _g_constr_cm(x, m_a2t, m_d2a, m_s2a, max_speed):
         a2t_constr = np.sum(np.square(x[:, m_a2t:m_d2a]), axis=1) - 1  # = 0
 

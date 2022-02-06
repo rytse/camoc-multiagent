@@ -1,10 +1,20 @@
 from functools import partial
 
-from jax import jit
-import jax.numpy as np
+#from jax import jit
+import numpy as np
 
 
-@partial(jit, static_argnums=(1,))
+def halfinterval2slack(x, a):
+    y = np.zeros((x.shape[0], x.shape[1] * 3))
+    y[:, :x.shape[1]] = x
+    y[:, x.shape[1]: 2*x.shape[1]] = np.log(a - x + 1)
+    y[:, 2*x.shape[1]:] = np.log(x+1)
+
+    return y
+
+
+'''
+#@partial(jit, static_argnums=(1,))
 def halfinterval2slack(x, a):
     y = np.zeros((x.shape[0], x.shape[1] * 3))
 
@@ -15,7 +25,17 @@ def halfinterval2slack(x, a):
     return y
 
 
-@jit
+'''
+def fullinterval2slack(x: np.ndarray, a):
+    y = np.zeros(x.size * 3)
+
+    y[0:x.size] = x
+    y[x.size : x.size * 2] = np.log(a - x + 1)
+    y[x.size * 2:] = np.log(a + x + 1)
+
+
+'''
+#@jit
 def fullinterval2slack(x, a):
     y = np.zeros(x.size * 3)
     y.at[0 : x.size].set(x)
@@ -23,6 +43,8 @@ def fullinterval2slack(x, a):
     y.at[x.size * 2 :].set(np.log(a + x + 1))
 
     return y
+
+'''
 
 
 def identity_factory():
@@ -91,7 +113,7 @@ def fullinterval2slack_factory(a):
 
     return lambda x: fullinterval2slack(x, a)
 
-
+'''
 def obs_native2mfd(native, schema):
     mfd = np.zeros(sum([s["mfd_size"] for s in schema.values()]))
 
@@ -105,3 +127,6 @@ def obs_native2mfd(native, schema):
         idx_m += schema[field]["mfd_size"]
 
     return mfd
+
+
+'''
