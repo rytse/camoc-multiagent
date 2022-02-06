@@ -95,13 +95,13 @@ class RotatorCoverageWorld:
         # Integrate position
         self.positions += self.velocities * self.dt
 
-    def dumb_collision_fix(self):
-        positions_copy = self.positions[:]
-        square_sizes = np.square(self.entity_sizes)
-        for idx, pos in enumerate(self.positions):
-            tmp = np.square(positions_copy - pos)
-            indices = np.where(tmp < square_sizes)
-
+    #     def dumb_collision_fix(self):
+    #         positions_copy = self.positions[:]
+    #         square_sizes = np.square(self.entity_sizes)
+    #         for idx, pos in enumerate(self.positions):
+    #             tmp = np.square(positions_copy - pos)
+    #             indices = np.where(tmp < square_sizes)
+    #
     @property
     def landmarks(self) -> np.ndarray:
         return self.positions[self.n_agents :, :]
@@ -136,6 +136,7 @@ class RotatorCoverageWorld:
         agents_order = np.argsort(dist_to_agents)  # agents
         dist_to_agents = dist_to_agents[agents_order]
         speed_to_agents = speed_to_agents[agents_order]
+        speed_to_agents = np.clip(speed_to_agents, 0, 2 * self.maxspeed)
 
         obs = np.concatenate(
             [

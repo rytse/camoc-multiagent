@@ -78,13 +78,11 @@ class CAMOCAgent(ABC):
             act: list of actions
         """
 
-        self.obs[self.obs_idx:self.obs_idx+obs.shape[0], :] = obs
-        self.act[self.act_idx:self.act_idx+act.shape[0], :] = act
-
+        self.obs[self.obs_idx : self.obs_idx + obs.shape[0], :] = obs
+        self.act[self.act_idx : self.act_idx + act.shape[0], :] = act
 
         self.obs_idx += obs.shape[0]
         self.act_idx += act.shape[0]
-
 
     def aggregate_samples(self):
         self.mpoints = self.obs2mfd(self.obs, self.obs_idx)
@@ -99,14 +97,14 @@ class CAMOCAgent(ABC):
         Returns:
             action
         """
-        obs_m = self.obs2mfd(np.array([obs]), 1)
+
+        obs = np.array([obs])
+
+        obs_m = self.obs2mfd(obs, 1)
         idxs = self.find_nearest_simplex(obs_m)
         vhat = np.average(self.tmvecs[idxs], axis=0)
         vbar = self.project_onto_mfd(obs_m, vhat)
         v = self.tpm2act(vbar, obs_m)
-
-        if np.isnan(v).any():
-            breakpoint()
 
         return v
 
@@ -122,10 +120,8 @@ class CAMOCAgent(ABC):
 
         differences = self.mpoints - mpoint
         dists = np.linalg.norm(differences, axis=1)
-        k = 3 # nearest 3 elements
+        k = 3  # nearest 3 elements
         order = np.argpartition(dists, k)
-        #breakpoint()
-        #order = np.argsort(dists)
         return order[:k]
 
     def project_onto_mfd(self, x, vhat):
@@ -158,18 +154,13 @@ class CAMOCAgent(ABC):
         """
 
         ld = 0  # Lagrange multiplier lambda
-        
+
         ggc = g_grad_constr(x)
-        '''
         for _ in range(n_iters):
             dld = -g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
             ld += dld
-        '''
-        
-        
-        
 
-        return vhat #+ g_grad_constr(np.array([vhat])) * ld
+        return vhat + g_grad_constr(np.array([vhat])) * ld
 
     @abstractmethod
     def obs2mfd(self, obs):
@@ -227,4 +218,3 @@ class CAMOCAgent(ABC):
         I don't know ryan come up with some bullshit, big brain, spe
         """
         pass
-

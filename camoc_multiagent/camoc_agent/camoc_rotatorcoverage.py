@@ -1,9 +1,10 @@
 from functools import partial
 
-#from jax import jit
+# from jax import jit
 import numpy as np
 import jax.numpy as jnp
-#from jax.lax import dynamic_slice, dynamic_update_slice
+
+# from jax.lax import dynamic_slice, dynamic_update_slice
 
 from camoc_agent.camoc_agent import CAMOCAgent
 from camoc_agent.manifold_utils import *
@@ -32,7 +33,7 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         max_speed: float,
         dt: float,
         n_iters: int = 2,
-        prealloc_size: int =  50_000_000,
+        prealloc_size: int = 50_000_000,
     ):
         """
         Initialize a RotatorCoverage agent.
@@ -87,12 +88,12 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # obs.shape = (num samples, num obs coords)
         # d2t_mfd = dynamic_slice(obs, (0, o_d2t), (num_obs, o_a2t - o_d2t))
         # ^ wrong indexing!
-        d2t_mfd = obs[:num_obs, self.o_d2t:self.o_a2t]
+        d2t_mfd = obs[:num_obs, self.o_d2t : self.o_a2t]
 
         # Angle to target is converted into alternating cos(theta), sin(theta)
         # obs_a2t = dynamic_slice(obs, (0, o_a2t), (num_obs, o_d2a - o_a2t)).flatten()
         # ^ wrong indexing!
-        obs_a2t = obs[:num_obs, self.o_a2t:self.o_d2a].flatten()
+        obs_a2t = obs[:num_obs, self.o_a2t : self.o_d2a].flatten()
         a2t_mfd = np.empty((num_obs, 2))
         a2t_mfd[:, 0] = np.cos(obs_a2t)
         a2t_mfd[:, 1] = np.sin(obs_a2t)
@@ -100,13 +101,16 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # Distance to agents is not changed
         # d2a_mfd = dynamic_slice(obs, (0, o_d2a), (num_obs, o_s2a - o_d2a))
         # ^ wrong indexing!
-        d2a_mfd = obs[:num_obs, self.o_d2a:self.o_s2a]
+        d2a_mfd = obs[:num_obs, self.o_d2a : self.o_s2a]
 
         # Speed is slacked with the halfinterval2slack function
         # obs_s2a = dynamic_slice(obs, (0, o_s2a), (num_obs, obs_len - o_s2a))
         # ^ wrong indexing!
-        obs_s2a = obs[:num_obs, self.o_s2a:]
-        s2a_mfd = halfinterval2slack(obs_s2a, self.max_speed)
+        obs_s2a = obs[:num_obs, self.o_s2a :] / self.max_speed
+        if self.o_s2a > 2 or self.o_s2a < 0:
+            pass
+            # breakpoint()
+        s2a_mfd = halfinterval2slack(obs_s2a, 2)
 
         # Perform buffer updates
         mfd_buf = np.empty((num_obs, self.mfd_size))  # pre-allocate output buffer
@@ -114,38 +118,48 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         #        mfd_buf = dynamic_update_slice(mfd_buf, a2t_mfd, (0, m_a2t))
         #        mfd_buf = dynamic_update_slice(mfd_buf, d2a_mfd, (0, m_d2a))
         #        mfd_buf = dynamic_update_slice(mfd_buf, s2a_mfd, (0, m_s2a))
-        mfd_buf[:, self.m_d2t:self.m_a2t] = d2t_mfd
-        mfd_buf[:, self.m_a2t:self.m_d2a] = a2t_mfd
-        mfd_buf[:, self.m_d2a:self.m_s2a] = d2a_mfd 
-        mfd_buf[:, self.m_s2a:] = s2a_mfd
+        mfd_buf[:, self.m_d2t : self.m_a2t] = d2t_mfd
+        mfd_buf[:, self.m_a2t : self.m_d2a] = a2t_mfd
+        mfd_buf[:, self.m_d2a : self.m_s2a] = d2a_mfd
+        mfd_buf[:, self.m_s2a :] = s2a_mfd
 
         return mfd_buf
-       
-        
-    
+
     def act2tpm(self, act, obs, num_obs):
-        # This assumes only one target for now TODO make it work for multiple
-        d2t = obs[:num_obs, self.o_d2t].ravel()
-        a2t = obs[:num_obs, self.o_a2t].ravel()
+        """
+        Convert an action to its tangent vector coordinates.
+        """
 
-        # x-y distance to target
-        Dx = d2t * np.cos(a2t)
-        Dy = d2t * np.sin(a2t)
-        # change in x-y due to action
-        dx = act[:num_obs, 0].ravel() * np.cos(act[:num_obs, 1].ravel())
-        dy = act[:num_obs, 0].ravel() * np.sin(act[:num_obs, 1].ravel())
-        Dd = np.sqrt(np.square(Dx - dx) + np.square(Dy - dy))  # clsoer/farther
+        # Get old triangle from observation
+        D_old = obs[:num_obs, self.o_d2t : self.o_a2t]  # dist to target
+        phi_old = obs[:num_obs, self.o_a2t : self.o_d2a]  # angle to target
+        x_old = D_old * np.cos(phi_old)
+        y_old = D_old * np.sin(phi_old)
 
-        dtheta = a2t - act[:num_obs, 1].ravel()
+        # Get translation triangle from action
+        theta = np.array([act[:num_obs, 0]]).T
+        s = np.array([act[:num_obs, 1]]).T  # dist of translation
+        l_x = s * np.cos(theta)
+        l_y = s * np.sin(theta)
 
+        # Get new triangle
+        x_new = x_old - l_x  # new dist to target
+        y_new = y_old - l_y
+        phi_new = np.arctan2(y_new, x_new)
+        D_new = np.sqrt(x_new ** 2 + y_new ** 2)
+
+        # Get effect on tangent vector coordinates
+        d_theta = phi_new - phi_old
+        d_D = D_new - D_old
+
+        # Stick it in a tangent vector with all the necessary zeros
+        # for the other coordinates
         v = np.empty((num_obs, self.mfd_size))
-        v[:, self.m_d2t] = Dd * self.dt
-        v[:, self.m_a2t] = np.cos(dtheta)
-        v[:, self.m_a2t + 1] = np.sin(dtheta)  # the rest are zeros
+        v[:, self.m_d2t] = d_D.T
+        v[:, self.m_a2t] = np.cos(d_theta).T
+        v[:, self.m_a2t + 1] = np.sin(d_theta).T  # the rest are zeros
 
-       
         return v
-
 
     def tpm2act(self, tpm, obs):
         """
@@ -157,33 +171,49 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         Returns:
             action
         """
+
+        # Get old triangle from observation
         d_old = obs[:, self.o_d2t]
         phi_old = obs[:, self.o_a2t]
-        d_new = d_old + tpm[self.m_d2t] * self.dt
-        phi_new = phi_old + tpm[self.m_a2t] * self.dt
 
-        l_x_new = d_new * np.cos(phi_new)
-        l_y_new = d_new * np.sin(phi_new)
-        l_x_old = d_old * np.cos(phi_old)
-        l_y_old = d_old * np.sin(phi_old)
-        dlx = l_x_old - l_x_new
-        dly = l_y_old - l_y_new
+        # Decode current heading angle from the tangent vector coordinates
+        d_theta_x = tpm[:, self.m_a2t]
+        d_theta_y = tpm[:, self.m_a2t + 1]
+        d_theta = np.arctan2(d_theta_y, d_theta_x)
 
-        theta_new = np.arctan2(dly, dlx)
-        speed_new = np.sqrt(np.square(dlx) + np.square(dly)) / self.dt
+        # Decode current distance to target from the tangent vector coordinates
+        d_D = tpm[:, self.m_d2t]
 
-        act = np.array([theta_new, speed_new])
+        # Get new triangle
+        d_new = d_D + d_old
+        phi_new = phi_old + d_theta
+
+        # Get side lengths of old and new target triangles
+        x_old = d_old * np.cos(phi_old)
+        y_old = d_old * np.sin(phi_old)
+        x_new = d_new * np.cos(phi_new)
+        y_new = d_new * np.sin(phi_new)
+
+        # Get translation triangle
+        l_x = x_new - x_old
+        l_y = y_new - y_old
+        theta = np.arctan2(l_y, l_x)
+        s = np.sqrt(l_x ** 2 + l_y ** 2)
+
+        #         if s > 2 or s < 0:
+        #             breakpoint()
+
+        act = np.array([theta, s])
         return act
-      
 
     def g_constr(self, x):
-        a2t_constr = np.sum(np.square(x[:, self.m_a2t:self.m_d2a]), axis=1) - 1  # = 0
-        
-        xs = x[:, self.m_s2a::3]
+        a2t_constr = np.sum(np.square(x[:, self.m_a2t : self.m_d2a]), axis=1) - 1  # = 0
+
+        xs = x[:, self.m_s2a :: 3]
         alphas = x[:, self.m_s2a + 1 :: 3]
         betas = x[:, self.m_s2a + 2 :: 3]
 
-        alpha_constrs = np.exp(alphas) + xs + self.max_speed - 1  # = 0
+        alpha_constrs = np.exp(alphas) + xs + 2 - 1  # = 0
         beta_constrs = np.exp(betas) - xs - 1  # = 0
 
         all_constrs = (
@@ -193,14 +223,11 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         )
 
         return all_constrs[0]
-   
-
-    
 
     def _g_grad_constr(self, x):
-        '''
+        """
         Compute the gradient of the constraint function.
-        '''
+        """
 
         # Angle to target vars
         theta_qs = x[:, self.m_a2t : self.m_d2a]
@@ -210,8 +237,8 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         xs = x[:, self.m_s2a :: 3]
         alphas = x[:, self.m_s2a + 1 :: 3]
         betas = x[:, self.m_s2a + 2 :: 3]
-        partial_xs = 2 * (np.exp(alphas) + xs + self.max_speed - 1)
-        partial_alphas = 2 * np.exp(alphas) * (np.exp(alphas) + xs + self.max_speed - 1)
+        partial_xs = 2 * ((np.exp(alphas) + xs + 2 - 1) + (np.exp(betas) - xs - 1))
+        partial_alphas = 2 * np.exp(alphas) * (np.exp(alphas) + xs + 2 - 1)
         partial_betas = 2 * np.exp(betas) * (np.exp(betas) - xs - 1)
 
         # Other unused vars (zero gradients)

@@ -36,32 +36,19 @@ for tidx in range(1):
 
     env.reset()
 
-
-
     for i, agent in enumerate(env.agent_iter()):
         obs, reward, done, info = env.last()
         act = model.predict(obs, deterministic=True)[0] if not done else None
         env.step(act)
 
         if not done:  # TODO slice off framestack sanely
-            #breakpoint()
             cagent.add_samples(np.array([obs[-20:]]), np.array([act]))
         else:
             break
 
-
-# Save agent
-# with open("camoc_agent/policies/camoc_agent.pickle", "wb") as fi:
-#     pickle.dump(cagent, fi)
-
-
-print(f"Time: {time.time() - s}")
-
-
 # Eval the CAMOC agent
 cagent.aggregate_samples()
 env.reset()
-#breakpoint()
 num_zero_actions = 0
 for agent in env.agent_iter():
     obs, reward, done, info = env.last()
@@ -70,6 +57,5 @@ for agent in env.agent_iter():
         break
 
     act = cagent.policy(np.array(obs[-20:]))
-
     env.render()
     env.step(act.ravel())
