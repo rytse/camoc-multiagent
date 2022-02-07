@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from functools import partial
+
 import numpy as np
+from sklearn.neighbors import KDTree
 
 import jax.numpy as jnp
 from jax import grad
@@ -69,6 +71,7 @@ class CAMOCAgent(ABC):
         # until you processed all added samples.
         self.mpoints = None
         self.tmvecs = None
+        self.kdt = None
 
         # Calculate the gradient of the constraint function only once
         self.g_grad_constr = grad(self.g_constr)
@@ -91,6 +94,7 @@ class CAMOCAgent(ABC):
     def aggregate_samples(self):
         self.mpoints = self.obs2mfd(self.obs, self.obs_idx)
         self.tmvecs = self.act2tpm(self.act, self.obs, self.act_idx)
+        self.kdt = KDTree(self.mpoints)
 
     def policy(self, obs):
         """
@@ -105,10 +109,11 @@ class CAMOCAgent(ABC):
         obs = np.array([obs])
 
         obs_m = self.obs2mfd(obs, 1)
-        idxs = self.find_nearest_simplex(obs_m)
-        vhat = np.average(self.tmvecs[idxs, :], axis=0)
+        _, idxs = self.kdt.query(obs_m, k=3)
+        vhat = np.average(self.tmvecs[idxs[0], :], axis=0)
         vbar = self.project_onto_mfd(obs_m, vhat)
-        v = self.tpm2act(vbar, obs_m)
+        v = self.tpm2act(vbar, obs)
+        # v = self.tpm2act(np.array([vhat]), obs)
 
         return v
 
