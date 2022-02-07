@@ -4,7 +4,8 @@ from envs.rotator_coverage import rotator_coverage_v0
 
 
 env = rotator_coverage_v0.env_eval()
-model = PPO.load("./policies/rotator_coverage_v0_ppo_policy_best/best_model")
+# model = PPO.load("./policies/rotator_coverage_v0_ppo_policy_best/best_model")
+model = PPO.load("./policies/rotator_coverage_v0_2022_01_26_23_36")
 
 env.reset()
 for agent in env.agent_iter():

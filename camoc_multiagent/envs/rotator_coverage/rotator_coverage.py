@@ -22,8 +22,8 @@ class RotatorCoverageWorld:
         self.maxspeed = 2
 
         self.dim_p = 2  # (x,y)
-        self.contact_force = np.float32(5e2)
-        self.contact_margin = np.float32(1e-4)
+        self.contact_force = np.float64(5e2)
+        self.contact_margin = np.float64(1e-4)
 
         # Agent controls, every agent has an X, Y positon
         self.positions: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
@@ -79,7 +79,7 @@ class RotatorCoverageWorld:
             if np.isnan(penetrations).any():
                 breakpoint()
 
-            forces_s: np.float32 = self.contact_force * penetrations * self.collisions
+            forces_s: np.float64 = self.contact_force * penetrations * self.collisions
             diffmat: np.ndarray = (
                 self.positions[:, None, :] - self.positions
             )  # skew symetric
@@ -265,7 +265,7 @@ class RotatorCoverageEnv(AECEnv):
             state_dim += obs_dim
 
             self.action_spaces[i] = spaces.Box(
-                low=np.array([-np.pi, 0]), high=np.array([np.pi, 1]), dtype=np.float32
+                low=np.array([-np.pi, 0]), high=np.array([np.pi, 1]), dtype=np.float64
             )
             # Observations:
             obsmin = np.concatenate(
@@ -287,15 +287,15 @@ class RotatorCoverageEnv(AECEnv):
             )
 
             self.observation_spaces[i] = spaces.Box(
-                low=obsmin, high=obsmax, dtype=np.float32
+                low=obsmin, high=obsmax, dtype=np.float64
             )
 
         # state space is the sum of all the local observation spaces it seems? shape wise taht is
         self.state_space = spaces.Box(
-            low=-np.float32(np.inf),
-            high=+np.float32(np.inf),
+            low=-np.float64(np.inf),
+            high=+np.float64(np.inf),
             shape=(state_dim,),
-            dtype=np.float32,
+            dtype=np.float64,
         )
 
         self.steps: int = 0
@@ -320,7 +320,7 @@ class RotatorCoverageEnv(AECEnv):
     def state(self):
         states = tuple(
             self.scenario.observation(self.world.agents[agent], self.world).astype(
-                np.float32
+                np.float64
             )
             for agent in self.possible_agents
         )

@@ -200,10 +200,7 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         theta = np.arctan2(l_y, l_x)
         s = np.sqrt(l_x ** 2 + l_y ** 2)
 
-        #         if s > 2 or s < 0:
-        #             breakpoint()
-
-        act = np.array([theta, s])
+        act = np.array([np.clip(theta, -np.pi, np.pi), np.clip(s, 0, 1)])
         return act
 
     def g_constr(self, x):

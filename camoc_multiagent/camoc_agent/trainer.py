@@ -2,7 +2,7 @@ import sys
 import pickle
 
 import numpy as np
-
+import PIL
 
 from stable_baselines3 import PPO
 
@@ -30,7 +30,7 @@ model = PPO.load("./policies/rotator_coverage_v0_2022_01_26_23_36")
 
 # Sample a batch of trajectories
 s = time.time()
-for tidx in range(1):
+for tidx in range(5000):
     if tidx % 10 == 0:
         print("Sampling trajectory {}".format(tidx))
 
@@ -50,12 +50,19 @@ for tidx in range(1):
 cagent.aggregate_samples()
 env.reset()
 num_zero_actions = 0
+frame_list = []
 for agent in env.agent_iter():
     obs, reward, done, info = env.last()
 
     if done:
         break
 
-    act = cagent.policy(np.array(obs[-20:]))
+    act = cagent.policy(np.array(obs[-20:])).ravel()
+
+    env.step(act)
     env.render()
-    env.step(act.ravel())
+    frame_list.append(PIL.Image.fromarray(env.render(mode="rgb_array")))
+
+frame_list[0].save(
+    "out.gif", save_all=True, append_images=frame_list[1:], duration=3, loop=0
+)
