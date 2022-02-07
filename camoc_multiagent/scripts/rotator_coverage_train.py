@@ -1,8 +1,8 @@
 from envs.rotator_coverage import rotator_coverage_v0
 from rl_agent.ppo_utils import train_ppo, read_hyperparams
 
-NAME = "rotator_coverage_v0"
-NUM_TIMESTEPS = int(1e4)
+NAME = "rotator_coverage_v0_f2"
+NUM_TIMESTEPS = int(1e7)
 EVAL_RENDER = True
 
 print(f"NUM TIMESTEPS: {NUM_TIMESTEPS}")
@@ -18,7 +18,8 @@ model = train_ppo(
     NAME,
     NUM_TIMESTEPS,
     verbose=3,
-    preload_name=f"{NAME}_2022_01_26_23_36",
+    # preload_name=f"{NAME}_2022_01_26_23_36",
+    preload_name=None,
     **hyp,
 )
 

@@ -30,12 +30,7 @@ class CAMOCAgent(ABC):
     """
 
     def __init__(
-        self,
-        obs_size,
-        act_size,
-        mfd_size,
-        n_iters=2,
-        prealloc_size=50_000_000,
+        self, obs_size, act_size, mfd_size, n_iters=2, prealloc_size=50_000_000,
     ):
         """
         Create a new CAMOC agent.

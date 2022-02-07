@@ -27,7 +27,9 @@ class RotatorCoverageWorld:
 
         # Agent controls, every agent has an X, Y positon
         self.positions: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
+        self.last_positions: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
         self.velocities: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
+        self.last_velocities: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
 
         self.ctrl_thetas: np.ndarray = np.zeros(n_entities)
         self.ctrl_speeds: np.ndarray = np.zeros(n_entities)  # [:, None]
@@ -51,6 +53,10 @@ class RotatorCoverageWorld:
         self.diag_indices = np.diag_indices(self.positions.shape[0])
 
     def step(self) -> None:
+        # Save last positions and velocities
+        self.last_positions[:] = self.positions
+        self.last_velocities[:] = self.velocities
+
         # heading.shape = 2,6,2
         heading: np.ndarray = np.vstack(
             [np.cos(self.ctrl_thetas), np.sin(self.ctrl_thetas)]
@@ -111,6 +117,10 @@ class RotatorCoverageWorld:
         return self.positions[: self.n_agents, :]
 
     @property
+    def prev_agents(self) -> np.ndarray:
+        return self.last_positions[: self.n_agents, :]
+
+    @property
     def agent_velocities(self) -> np.ndarray:
         return self.velocities[: self.n_agents, :]
 
@@ -138,12 +148,23 @@ class RotatorCoverageWorld:
         speed_to_agents = speed_to_agents[agents_order]
         speed_to_agents = np.clip(speed_to_agents, 0, 2 * self.maxspeed)
 
+        # Previous distance to landmarks
+        prev_vec_to_targets = self.landmarks - self.prev_agents[agent_index]
+        prev_dist_to_targets = np.linalg.norm(prev_vec_to_targets, axis=1)
+
+        # Previous angles to landmarks
+        prev_angles_to_targets = np.arctan2(
+            prev_vec_to_targets[:, 1], prev_vec_to_targets[:, 0]
+        )
+
         obs = np.concatenate(
             [
                 dist_to_targets,
                 angles_to_targets,
                 dist_to_agents[1:],
                 speed_to_agents[1:],
+                prev_dist_to_targets,
+                prev_angles_to_targets,
             ]
         )
 
@@ -270,10 +291,12 @@ class RotatorCoverageEnv(AECEnv):
             # Observations:
             obsmin = np.concatenate(
                 [
-                    [-np.inf] * self.world.n_landmarks,
+                    [-np.inf] * self.world.n_landmarks,  # TODO = 0
                     [-np.pi] * self.world.n_landmarks,
-                    [-np.inf] * (self.world.n_agents - 1),
+                    [-np.inf] * (self.world.n_agents - 1),  # TODO = 0
                     [0] * (self.world.n_agents - 1),
+                    [0] * self.world.n_landmarks,
+                    [-np.pi] * self.world.n_landmarks,
                 ]
             )
 
@@ -283,6 +306,8 @@ class RotatorCoverageEnv(AECEnv):
                     [np.pi] * self.world.n_landmarks,
                     [np.inf] * (self.world.n_agents - 1),
                     [self.world.maxspeed * 2] * (self.world.n_agents - 1),
+                    [np.inf] * self.world.n_landmarks,
+                    [np.pi] * self.world.n_landmarks,
                 ]
             )
 

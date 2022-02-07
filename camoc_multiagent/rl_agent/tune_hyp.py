@@ -89,10 +89,7 @@ def study(env_train, env_eval, name, train_timesteps, optimizer_timesteps):
             "max_grad_norm": max_grad_norm,
             "vf_coef": vf_coef,
             "sde_sample_freq": sde_sample_freq,
-            "policy_kwargs": dict(
-                log_std_init=log_std_init,
-                ortho_init=ortho_init,
-            ),
+            "policy_kwargs": dict(log_std_init=log_std_init, ortho_init=ortho_init,),
         }
 
         model = train_ppo(env_train, env_eval, name, train_timesteps, **ppo_hyperparams)

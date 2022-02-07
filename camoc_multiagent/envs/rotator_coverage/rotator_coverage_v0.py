@@ -22,7 +22,8 @@ class raw_env(RotatorCoverageEnv):
 def preprocess_train(env):
     def _preprocess_train(**kwargs):
         nenv = env(**kwargs)
-        nenv = ss.frame_stack_v1(nenv, 10)
+        # nenv = ss.frame_stack_v1(nenv, 10)
+        # nenv = ss.frame_stack_v1(nenv, 2)
         nenv = ss.pettingzoo_env_to_vec_env_v1(nenv)
         nenv = ss.concat_vec_envs_v1(
             nenv, 1, num_cpus=1, base_class="stable_baselines3"
@@ -36,7 +37,8 @@ def preprocess_train(env):
 def preprocess_eval(env):
     def _preprocess_eval(**kwargs):
         nenv = env(**kwargs)
-        nenv = ss.frame_stack_v1(nenv, 10)
+        # nenv = ss.frame_stack_v1(nenv, 10)
+        # nenv = ss.frame_stack_v1(nenv, 2)
         return nenv
 
     return _preprocess_eval

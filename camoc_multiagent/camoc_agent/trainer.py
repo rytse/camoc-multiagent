@@ -14,7 +14,7 @@ import time
 # Load the environment (to pull data from!)
 env = rotator_coverage_v0.env_eval()
 
-world = env.env.env.env.world
+world = env.env.env.world
 NUM_AGENTS = world.n_agents
 NUM_TARGETS = world.n_entities - NUM_AGENTS
 MAX_SPEED = world.maxspeed
@@ -26,11 +26,12 @@ cagent = camoc_agent.camoc_rotatorcoverage.CAMOC_RotatorCoverage_Agent(
 )
 
 # Load the pretrained RL agent
-model = PPO.load("./policies/rotator_coverage_v0_2022_01_26_23_36")
+# model = PPO.load("./policies/rotator_coverage_v0_2022_01_26_23_36")
+model = PPO.load("./policies/rotator_coverage_v0_f2_2022_02_07_03_45")
 
 # Sample a batch of trajectories
 s = time.time()
-for tidx in range(5000):
+for tidx in range(1000):
     if tidx % 10 == 0:
         print("Sampling trajectory {}".format(tidx))
 
@@ -42,7 +43,7 @@ for tidx in range(5000):
         env.step(act)
 
         if not done:  # TODO slice off framestack sanely
-            cagent.add_samples(np.array([obs[-20:]]), np.array([act]))
+            cagent.add_samples(np.array([obs]), np.array([act]))
         else:
             break
 
@@ -57,12 +58,13 @@ for agent in env.agent_iter():
     if done:
         break
 
-    act = cagent.policy(np.array(obs[-20:])).ravel()
+    # act = cagent.policy(np.array(obs[-20:])).ravel()
+    act = cagent.policy(obs).ravel()
 
     env.step(act)
     env.render()
     frame_list.append(PIL.Image.fromarray(env.render(mode="rgb_array")))
 
 frame_list[0].save(
-    "out.gif", save_all=True, append_images=frame_list[1:], duration=3, loop=0
+    "camoc_out.gif", save_all=True, append_images=frame_list[1:], duration=3, loop=0
 )

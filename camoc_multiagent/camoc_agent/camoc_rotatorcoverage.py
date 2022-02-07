@@ -48,9 +48,14 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         """
 
         super().__init__(
-            num_targets * 2 + (num_agents - 1) * 2,
+            num_targets * 4 + (num_agents - 1) * 2,
             2,
-            num_targets + num_targets * 2 + (num_agents - 1) + (num_agents - 1) * 3,
+            num_targets
+            + num_targets * 2
+            + (num_agents - 1)
+            + (num_agents - 1) * 3
+            + num_targets
+            + num_targets * 2,
             n_iters,
             prealloc_size,
         )
@@ -66,12 +71,16 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         self.o_a2t = self.o_d2t + num_targets
         self.o_d2a = self.o_a2t + num_targets
         self.o_s2a = self.o_d2a + num_agents - 1
+        self.o_ptd = self.o_s2a + num_agents - 1
+        self.o_pta = self.o_ptd + num_targets
 
         # Pre-compute indices for the various slices of the manifold coords
         self.m_d2t = 0
         self.m_a2t = self.m_d2t + num_targets
         self.m_d2a = self.m_a2t + num_targets * 2
         self.m_s2a = self.m_d2a + (num_agents - 1)
+        self.m_ptd = self.m_s2a + (num_agents - 1) * 3
+        self.m_pta = self.m_ptd + num_targets
 
     def obs2mfd(self, obs, num_obs):
         """
@@ -106,7 +115,7 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # Speed is slacked with the halfinterval2slack function
         # obs_s2a = dynamic_slice(obs, (0, o_s2a), (num_obs, obs_len - o_s2a))
         # ^ wrong indexing!
-        obs_s2a = obs[:num_obs, self.o_s2a :] / self.max_speed
+        obs_s2a = obs[:num_obs, self.o_s2a : self.o_ptd] / self.max_speed
         if self.o_s2a > 2 or self.o_s2a < 0:
             pass
             # breakpoint()
@@ -114,14 +123,12 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
 
         # Perform buffer updates
         mfd_buf = np.empty((num_obs, self.mfd_size))  # pre-allocate output buffer
-        #        mfd_buf = dynamic_update_slice(mfd_buf, d2t_mfd, (0, m_d2t))
-        #        mfd_buf = dynamic_update_slice(mfd_buf, a2t_mfd, (0, m_a2t))
-        #        mfd_buf = dynamic_update_slice(mfd_buf, d2a_mfd, (0, m_d2a))
-        #        mfd_buf = dynamic_update_slice(mfd_buf, s2a_mfd, (0, m_s2a))
         mfd_buf[:, self.m_d2t : self.m_a2t] = d2t_mfd
         mfd_buf[:, self.m_a2t : self.m_d2a] = a2t_mfd
         mfd_buf[:, self.m_d2a : self.m_s2a] = d2a_mfd
-        mfd_buf[:, self.m_s2a :] = s2a_mfd
+        mfd_buf[:, self.m_s2a : self.m_ptd] = s2a_mfd
+        mfd_buf[:, self.m_pta] = np.cos(obs[:num_obs, self.o_pta])
+        mfd_buf[:, self.m_pta] = np.sin(obs[:num_obs, self.o_pta])
 
         return mfd_buf
 
@@ -152,12 +159,19 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         d_theta = phi_new - phi_old
         d_D = D_new - D_old
 
+        # Get effect on prev tangent vector coordinates
+        d_D_prev = D_old - D_new
+        d_theta_prev = phi_old - phi_new
+
         # Stick it in a tangent vector with all the necessary zeros
         # for the other coordinates
         v = np.empty((num_obs, self.mfd_size))
         v[:, self.m_d2t] = d_D.T
         v[:, self.m_a2t] = np.cos(d_theta).T
         v[:, self.m_a2t + 1] = np.sin(d_theta).T  # the rest are zeros
+        v[:, self.m_ptd] = d_D_prev.T
+        v[:, self.m_pta] = np.cos(d_theta_prev).T
+        v[:, self.m_pta + 1] = np.sin(d_theta_prev).T
 
         return v
 
@@ -197,13 +211,28 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # Get translation triangle
         l_x = x_new - x_old
         l_y = y_new - y_old
-        theta = np.arctan2(l_y, l_x)
-        s = np.sqrt(l_x ** 2 + l_y ** 2)
+        theta = np.arctan2(-l_y, -l_x)
+        speed = np.sqrt(l_x ** 2 + l_y ** 2)
 
-        act = np.array([np.clip(theta, -np.pi, np.pi), np.clip(s, 0, 1)])
+        # Stick it in an action
+        act = np.array([np.clip(theta, -np.pi, np.pi), np.clip(speed, 0, 1)])
+        # act = np.array([theta, speed])
+
+        #         if (theta > np.pi).any() or (theta < -np.pi).any() or (speed > 1.2).any() or (speed < 0).any():
+        #             print("\n\nact coords clipped")
+        #             breakpoint()
+        #         if (d_old < 0).any() or (d_new < 0).any():
+        #             print("\n\nd_old or d_new < 0")
+        #             breakpoint()
+        if np.isnan(act).any():
+            print("\n\nact is nan")
+            breakpoint()
+            act = np.zeros_like(act)
+
         return act
 
     def g_constr(self, x):
+        # TODO make constraint for dist >= 0
         a2t_constr = np.sum(np.square(x[:, self.m_a2t : self.m_d2a]), axis=1) - 1  # = 0
 
         xs = x[:, self.m_s2a :: 3]
@@ -212,6 +241,9 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
 
         alpha_constrs = np.exp(alphas) + xs + 2 - 1  # = 0
         beta_constrs = np.exp(betas) - xs - 1  # = 0
+
+        # TODO make constraint for prev angle
+        # TODO make constraint for prev dist
 
         all_constrs = (
             np.square(a2t_constr)
