@@ -5,6 +5,8 @@ import numpy as np
 import jax.numpy as jnp
 from jax import grad
 
+import torch
+
 
 class CAMOCAgent(ABC):
     """
@@ -30,7 +32,12 @@ class CAMOCAgent(ABC):
     """
 
     def __init__(
-        self, obs_size, act_size, mfd_size, n_iters=2, prealloc_size=50_000_000,
+        self,
+        obs_size,
+        act_size,
+        mfd_size,
+        n_iters=2,
+        prealloc_size=50_000_000,
     ):
         """
         Create a new CAMOC agent.
@@ -52,6 +59,8 @@ class CAMOCAgent(ABC):
         # Buffer of observations and actions in native coords
         self.obs = np.empty((prealloc_size, obs_size))
         self.act = np.empty((prealloc_size, act_size))
+        self.obs[:] = np.nan
+        self.act[:] = np.nan
         self.obs_idx = 0
         self.act_idx = 0
 
@@ -97,7 +106,7 @@ class CAMOCAgent(ABC):
 
         obs_m = self.obs2mfd(obs, 1)
         idxs = self.find_nearest_simplex(obs_m)
-        vhat = np.average(self.tmvecs[idxs], axis=0)
+        vhat = np.average(self.tmvecs[idxs, :], axis=0)
         vbar = self.project_onto_mfd(obs_m, vhat)
         v = self.tpm2act(vbar, obs_m)
 
@@ -116,8 +125,12 @@ class CAMOCAgent(ABC):
         differences = self.mpoints - mpoint
         dists = np.linalg.norm(differences, axis=1)
         k = 3  # nearest 3 elements
-        order = np.argpartition(dists, k)
-        return order[:k]
+        order = np.argpartition(dists, k)[:k]
+        # order = torch.topk(
+        #     torch.tensor(dists, device=torch.device("cuda")), k, largest=False
+        # ).indices.cpu().numpy()
+
+        return order
 
     def project_onto_mfd(self, x, vhat):
         """

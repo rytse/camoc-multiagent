@@ -104,6 +104,7 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # ^ wrong indexing!
         obs_a2t = obs[:num_obs, self.o_a2t : self.o_d2a].flatten()
         a2t_mfd = np.empty((num_obs, 2))
+        a2t_mfd[:] = np.nan
         a2t_mfd[:, 0] = np.cos(obs_a2t)
         a2t_mfd[:, 1] = np.sin(obs_a2t)
 
@@ -123,12 +124,14 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
 
         # Perform buffer updates
         mfd_buf = np.empty((num_obs, self.mfd_size))  # pre-allocate output buffer
+        mfd_buf[:] = np.nan  # initialize to NaN
         mfd_buf[:, self.m_d2t : self.m_a2t] = d2t_mfd
         mfd_buf[:, self.m_a2t : self.m_d2a] = a2t_mfd
         mfd_buf[:, self.m_d2a : self.m_s2a] = d2a_mfd
         mfd_buf[:, self.m_s2a : self.m_ptd] = s2a_mfd
+        mfd_buf[:, self.m_ptd] = obs[:num_obs, self.o_ptd]
         mfd_buf[:, self.m_pta] = np.cos(obs[:num_obs, self.o_pta])
-        mfd_buf[:, self.m_pta] = np.sin(obs[:num_obs, self.o_pta])
+        mfd_buf[:, self.m_pta + 1] = np.sin(obs[:num_obs, self.o_pta])
 
         return mfd_buf
 
@@ -166,12 +169,17 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         # Stick it in a tangent vector with all the necessary zeros
         # for the other coordinates
         v = np.empty((num_obs, self.mfd_size))
+        v[:] = np.nan
         v[:, self.m_d2t] = d_D.T
         v[:, self.m_a2t] = np.cos(d_theta).T
         v[:, self.m_a2t + 1] = np.sin(d_theta).T  # the rest are zeros
+        v[:, self.m_d2a : self.m_ptd] = 0
         v[:, self.m_ptd] = d_D_prev.T
         v[:, self.m_pta] = np.cos(d_theta_prev).T
         v[:, self.m_pta + 1] = np.sin(d_theta_prev).T
+
+        if np.any(np.isnan(v)):
+            breakpoint()
 
         return v
 

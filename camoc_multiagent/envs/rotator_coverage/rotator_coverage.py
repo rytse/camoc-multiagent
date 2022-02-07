@@ -29,7 +29,6 @@ class RotatorCoverageWorld:
         self.positions: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
         self.last_positions: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
         self.velocities: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
-        self.last_velocities: np.ndarray = np.zeros(shape=(n_entities, self.dim_p))
 
         self.ctrl_thetas: np.ndarray = np.zeros(n_entities)
         self.ctrl_speeds: np.ndarray = np.zeros(n_entities)  # [:, None]
@@ -54,8 +53,7 @@ class RotatorCoverageWorld:
 
     def step(self) -> None:
         # Save last positions and velocities
-        self.last_positions[:] = self.positions
-        self.last_velocities[:] = self.velocities
+        self.last_positions = self.positions[:]
 
         # heading.shape = 2,6,2
         heading: np.ndarray = np.vstack(
