@@ -1,5 +1,7 @@
 # Saved policies
 *.zip
+*.npy
+*.gif
 logs/
 
 ## Python

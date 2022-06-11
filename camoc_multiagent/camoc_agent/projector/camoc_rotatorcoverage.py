@@ -141,7 +141,9 @@ class CAMOC_RotatorCoverage_Agent(CAMOCAgent):
         """
 
         # Get old triangle from observation
-        D_old = obs[:num_obs, self.o_d2t : self.o_a2t]  # dist to target
+        D_old = obs[
+            :num_obs, self.o_d2t : self.o_a2t
+        ]  # dist to target before action is taken
         phi_old = obs[:num_obs, self.o_a2t : self.o_d2a]  # angle to target
         x_old = D_old * np.cos(phi_old)
         y_old = D_old * np.sin(phi_old)
