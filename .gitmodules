@@ -1,3 +1,3 @@
-[submodule "pnn"]
-	path = pnn
+[submodule "camoc_multiagent/pnn"]
+	path = camoc_multiagent/pnn
 	url = git@github.com:rytse/pnn.git
