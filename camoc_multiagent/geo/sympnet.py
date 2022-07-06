@@ -1,3 +1,5 @@
+from abc import abstractmethod
+
 import torch
 from torch import nn
 
@@ -20,24 +22,23 @@ class LinSympLayer(nn.Module):
         super().__init__()
 
         self.d = d
+        self.ul = ul
 
         self.A = nn.Parameter(torch.randn(d, d))
-
-        self.S = torch.zeros(d, d)  # A + A^T
-        self.M = torch.eye(2 * d, 2 * d)  # [ I, 0/S_i ; S_i/0, I]
 
         if ul != "up" and ul != "low":
             raise ValueError("ul must be 'up' or 'low'")
 
     def forward(self, pq):
-        self.S = self.A + self.A.t()
+        S = self.A + self.A.t()
+        M = torch.eye(2 * self.d, 2 * self.d)
 
         if self.ul == "up":
-            self.M[self.d :, : self.d] = self.S
+            M[self.d :, : self.d] = S
         elif self.ul == "low":
-            self.M[: self.d, self.d :] = self.S
+            M[: self.d, self.d :] = S
 
-        return self.M @ pq
+        return M @ pq
 
 
 class LinSympMod(nn.Module):
@@ -75,7 +76,7 @@ class LinSympMod(nn.Module):
         self.M = nn.Sequential(*self.layers)
 
     def forward(self, pq):
-        return self.M(self.pq) + self.b
+        return self.M(pq.t()).t() + self.b
 
 
 class ActSympMod(nn.Module):
@@ -106,13 +107,13 @@ class ActSympMod(nn.Module):
             raise ValueError("ul must be 'up' or 'low'")
 
     def forward(self, pq):
-        p = pq[: self.d]
-        q = pq[self.d :]
+        p = pq[:, : self.d]
+        q = pq[:, self.d :]
 
         if self.ul == "up":
-            return torch.vstack([p + self.a * self.act(q), q])
+            return torch.hstack([p + self.a * self.act(q), q])
         elif self.ul == "low":
-            return torch.vstack([p, q + self.a * self.act(p)])
+            return torch.hstack([p, q + self.a * self.act(p)])
 
 
 class GradSympMod(nn.Module):
@@ -149,15 +150,27 @@ class GradSympMod(nn.Module):
             raise ValueError("ul must be 'up' or 'low'")
 
     def forward(self, pq):
-        p = pq[: self.d]
-        q = pq[self.d :]
+        P = pq[:, : self.d]
+        Q = pq[:, self.d :]
 
         if self.ul == "up":
-            z = self.K.t() @ (self.a * self.act(self.K @ q + self.b))
-            return torch.vstack([p + z, q])
+            # z = self.K.t() @ (self.a * self.act(self.K @ q.t() + self.b))
+            # but batched
+
+            x = torch.einsum("ij, kj -> ki", self.K, Q)
+            y = self.a * self.act(x + self.b)
+            z = (self.K.t() @ y.t()).t()
+
+            return torch.hstack([P + z, Q])
         elif self.ul == "low":
-            z = self.K.t() @ (self.a * self.act(self.K @ p + self.b))
-            return torch.vstack([p, q + z])
+            # z = self.K.t() @ (self.a * self.act(self.K @ p + self.b))
+            # but batched
+
+            x = torch.einsum("ij, kj -> ki", self.K, P)
+            y = self.a * self.act(x + self.b)
+            z = (self.K.t() @ y.t()).t()
+
+            return torch.hstack([P, Q + z])
 
 
 class ExtSympMod(nn.Module):
@@ -175,7 +188,7 @@ class ExtSympMod(nn.Module):
         width: module width, number of multiplications before summing
         ul: 'up' or 'low', upper or lower module
         act: activation function
-        
+
         """
 
         super().__init__()
@@ -195,23 +208,37 @@ class ExtSympMod(nn.Module):
             raise ValueError("ul must be 'up' or 'low'")
 
     def forward(self, pqc):
-        p = pqc[: self.d]
-        q = pqc[self.d : 2 * self.d]
-        c = pqc[2 * self.d :]
+        P = pqc[:, : self.d]
+        Q = pqc[:, self.d : 2 * self.d]
+        C = pqc[:, 2 * self.d :]
 
         if self.ul == "up":
-            z = self.K1.t() * (self.a * self.act(self.K1 @ q + self.K2 @ c + self.b))
-            return torch.vstack([p + z, q, c])
+            x = self.K1 @ Q.t() + self.K2 @ C.t() + self.b[:, None]
+            y = self.a[:, None] * self.act(x)
+            z = (self.K1.t() @ y).t()
+            return torch.hstack([P + z, Q, C])
         elif self.ul == "low":
-            z = self.K1.t() * (self.a * self.act(self.K1 @ p + self.K2 @ c + self.b))
-            return torch.vstack([p, q + z, c])
+            x = self.K1 @ P.t() + self.K2 @ C.t() + self.b[:, None]
+            y = self.a[:, None] * self.act(x)
+            z = (self.K1.t() @ y).t()
+            return torch.hstack([P, Q + z, C])
 
 
-class LASympNet(nn.Module):
-    def __init__(self, d, nlayers, subwidth, act=nn.ReLU):
+class SympNet(nn.Module):
+    """
+    Abstract class for symplectic networks (SympNets).
+    """
+
+    @abstractmethod
+    def forward(self, x):
+        pass
+
+
+class LASympNet(SympNet):
+    def __init__(self, d, nlayers, subwidth, act=nn.Sigmoid):
         """
         Linear + activation module based symplectic network. Made of a set of
-        linear symplectic modules and a set of activation modules. 
+        linear symplectic modules and a set of activation modules.
 
         TODO determine why in the paper they don't use an activation on the
         last layer.
@@ -221,6 +248,7 @@ class LASympNet(nn.Module):
         d: half the transformation dim (2d latent dim)
         nlayers: number of layers of act(lin()) modules
         subwidth: width of each linear module
+        act: activation function (pass a constructor)
 
         """
 
@@ -232,9 +260,9 @@ class LASympNet(nn.Module):
 
         ul_rep = "up"
         self.layers = []
-        for i in nlayers:
+        for i in range(nlayers):
             self.layers.append(LinSympMod(d, subwidth, ul_rep))
-            self.layers.append(ActSympMod(d, ul_rep, act))
+            self.layers.append(ActSympMod(d, ul_rep, act()))
             ul_rep = "low" if ul_rep == "up" else "up"
         self.M = nn.Sequential(*self.layers)
 
@@ -242,8 +270,8 @@ class LASympNet(nn.Module):
         return self.M(pq)
 
 
-class GSympNet(nn.Module):
-    def __init__(self, d, nlayers, subwidth, act=nn.ReLU):
+class GSympNet(SympNet):
+    def __init__(self, d, nlayers, subwidth, act=nn.Sigmoid):
         """
         Gradient module based symplectic network. Made of a set of gradient
         symplectic modules.
@@ -253,6 +281,7 @@ class GSympNet(nn.Module):
         d: half the transformation dim (2d latent dim)
         nlayers: number of layers of act(lin()) modules
         subwidth: width of each linear module
+        act: activation function (pass a constructor)
         """
 
         super().__init__()
@@ -263,8 +292,8 @@ class GSympNet(nn.Module):
 
         ul_rep = "up"
         self.layers = []
-        for i in nlayers:
-            self.layers.append(GradSympMod(d, subwidth, ul_rep, act))
+        for i in range(nlayers):
+            self.layers.append(GradSympMod(d, subwidth, ul_rep, act()))
             ul_rep = "low" if ul_rep == "up" else "up"
         self.M = nn.Sequential(*self.layers)
 
@@ -272,8 +301,8 @@ class GSympNet(nn.Module):
         return self.M(pq)
 
 
-class ESympNet(nn.Module):
-    def __init__(self, n, d, nlayers, subwidth, act=nn.ReLU):
+class ESympNet(SympNet):
+    def __init__(self, n, d, nlayers, subwidth, act=nn.Sigmoid):
         """
         Extended module based symplectic network. Made of a set of extended
         symplectic modules.
@@ -284,6 +313,7 @@ class ESympNet(nn.Module):
         d: reduction dimension
         nlayers: number of layers of act(lin()) modules
         subwidth: width of each linear module
+        act: activation function (pass a constructor)
         """
 
         super().__init__()
@@ -295,8 +325,8 @@ class ESympNet(nn.Module):
 
         ul_rep = "up"
         self.layers = []
-        for i in nlayers:
-            self.layers.append(ExtSympMod(n, d, subwidth, ul_rep, act))
+        for i in range(nlayers):
+            self.layers.append(ExtSympMod(n, d, subwidth, ul_rep, act()))
             ul_rep = "low" if ul_rep == "up" else "up"
         self.M = nn.Sequential(*self.layers)
 
