@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from functools import partial
+
 import numpy as np
+from sklearn.neighbors import KDTree
 
 import jax.numpy as jnp
 from jax import grad
@@ -32,12 +34,7 @@ class CAMOCAgent(ABC):
     """
 
     def __init__(
-        self,
-        obs_size,
-        act_size,
-        mfd_size,
-        n_iters=2,
-        prealloc_size=50_000_000,
+        self, obs_size, act_size, mfd_size, n_iters=2, prealloc_size=50_000_000,
     ):
         """
         Create a new CAMOC agent.
@@ -69,6 +66,7 @@ class CAMOCAgent(ABC):
         # until you processed all added samples.
         self.mpoints = None
         self.tmvecs = None
+        self.kdt = None
 
         # Calculate the gradient of the constraint function only once
         self.g_grad_constr = grad(self.g_constr)
@@ -91,6 +89,7 @@ class CAMOCAgent(ABC):
     def aggregate_samples(self):
         self.mpoints = self.obs2mfd(self.obs, self.obs_idx)
         self.tmvecs = self.act2tpm(self.act, self.obs, self.act_idx)
+        self.kdt = KDTree(self.mpoints)
 
     def policy(self, obs):
         """
@@ -102,13 +101,14 @@ class CAMOCAgent(ABC):
             action
         """
 
-        obs = np.array([obs])
+        #obs = np.array([obs])
 
-        obs_m = self.obs2mfd(obs, 1)
-        idxs = self.find_nearest_simplex(obs_m)
-        vhat = np.average(self.tmvecs[idxs, :], axis=0)
-        vbar = self.project_onto_mfd(obs_m, vhat)
-        v = self.tpm2act(vbar, obs_m)
+        obs_m = self.obs2mfd(obs, obs.shape[0])
+        _, idxs = self.kdt.query(obs_m, k=3)
+        vhat = np.average(self.tmvecs[idxs[0], :], axis=0)
+        vbar = self.project_onto_mfd(obs_m[0, :], vhat)
+        v = self.tpm2act(vbar, obs)
+        v = self.tpm2act(np.array([vhat]), obs)
 
         return v
 
@@ -163,9 +163,9 @@ class CAMOCAgent(ABC):
 
         ld = 0  # Lagrange multiplier lambda
 
-        ggc = g_grad_constr(x)
+        ggc = g_grad_constr(np.array([x]))
         for _ in range(n_iters):
-            dld = -g_constr(vhat + ggc * ld) / np.inner(ggc, ggc)
+            dld = -g_constr(np.array([vhat + ggc * ld])) / np.inner(ggc, ggc)
             ld += dld
 
         return vhat + g_grad_constr(np.array([vhat])) * ld

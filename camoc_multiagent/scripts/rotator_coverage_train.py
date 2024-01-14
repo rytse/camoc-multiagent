@@ -1,14 +1,15 @@
-from envs.rotator_coverage import rotator_coverage_v0
+from envs.rotator_coverage import multi_rotator_coverage_v0
 from rl_agent.ppo_utils import train_ppo, read_hyperparams
 
 NAME = "rotator_coverage_v0_f2"
-NUM_TIMESTEPS = int(1e7)
+#NUM_TIMESTEPS = int(1e7)
+NUM_TIMESTEPS = int(1e4)
 EVAL_RENDER = True
 
 print(f"NUM TIMESTEPS: {NUM_TIMESTEPS}")
 
-env_train = rotator_coverage_v0.env_train()
-env_eval = rotator_coverage_v0.env_train()
+env_train = multi_rotator_coverage_v0.env_train(10, 1, 1)
+env_eval = multi_rotator_coverage_v0.env_eval(10, 1, 1)
 
 hyp = read_hyperparams(NAME)
 
@@ -24,7 +25,7 @@ model = train_ppo(
 )
 
 if EVAL_RENDER:
-    env = rotator_coverage_v0.env_eval()
+    env = multi_rotator_coverage_v0.env_eval()
     env.reset()
     for agent in env.agent_iter():
         obs, reward, done, info = env.last()

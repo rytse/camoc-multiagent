@@ -14,14 +14,14 @@ def train_ppo(
         preload_name = name
     env_eval.reset()
 
-    savebest_cb = EvalCallback(
-        eval_env=env_eval,
-        best_model_save_path=f"./policies/{name}_ppo_policy_best",
-        log_path=f"./logs/{name}_eval_log.txt",
-        eval_freq=10_000,
-        deterministic=True,
-        render=False,
-    )
+    # savebest_cb = EvalCallback(
+    #     eval_env=env_eval,
+    #     best_model_save_path=f"./policies/{name}_ppo_policy_best",
+    #     log_path=f"./logs/{name}_eval_log.txt",
+    #     eval_freq=10_000,
+    #     deterministic=True,
+    #     render=False,
+    # )
 
     try:
         model = PPO.load(f"./policies/{preload_name}")
@@ -29,7 +29,8 @@ def train_ppo(
     except Exception:
         model = PPO(MlpPolicy, env_train, verbose=verbose, **kwargs)
 
-    model.learn(total_timesteps=total_timesteps, callback=savebest_cb)
+    #model.learn(total_timesteps=total_timesteps, callback=savebest_cb)
+    model.learn(total_timesteps=total_timesteps)
     now = datetime.now()
     model.save(f"./policies/{name}_{now.strftime('%Y_%m_%d_%H_%M')}")
 
